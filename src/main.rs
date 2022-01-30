@@ -1,6 +1,5 @@
 use serde::Deserialize;
 use std::env;
-use std::io;
 use std::process::Command;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Deserialize)]
@@ -67,17 +66,24 @@ impl Tree {
 }
 
 fn main() {
-    let input = io::stdin();
-    let input = input.lock();
-    let tree: Tree = serde_json::from_reader(input).unwrap();
+    let mut get_tree = Command::new("swaymsg");
+    get_tree.arg("-t").arg("get_tree");
+    let input = get_tree
+        .output()
+        .expect("failed to retrieve container tree");
+    let tree: Tree =
+        serde_json::from_slice(input.stdout.as_slice()).expect("failed to parse container tree");
+
     if let Some(task) = parse_args() {
         if let Some(neighbor) = tree.find_neighbor(&task) {
             let mut cmd = Command::new("swaymsg");
             cmd.arg(format!("[con_id={neighbor}] focus"));
-            cmd.spawn().unwrap().wait().unwrap();
+            cmd.spawn()
+                .and_then(|mut p| p.wait())
+                .expect("failed to send focus command");
         }
     } else {
-        println!("usage: swaytab (splith|splitv|tabbed|stacked) (forward|backward) (cycle|nocycle)");
+        println!("usage: sway_bettertabs (splith|splitv|tabbed|stacked) (forward|backward) (cycle|nocycle)");
     }
 }
 
@@ -98,7 +104,7 @@ fn parse_args() -> Option<Task> {
                 "stacked" => Some(Layout::Stacked),
                 _ => None,
             }?;
-            let backward  = match args[2].as_str() {
+            let backward = match args[2].as_str() {
                 "backward" => Some(true),
                 "forward" => Some(false),
                 _ => None,
