@@ -1,11 +1,23 @@
 # `sway_bfocus`
 
-"Better" basic focusing commands for Sway WM.
+"Better" tab and stack navigation for Sway WM.
 Proof of concept.
 
-This program allows you to separate the action of moving between splits
-from the action of cycling through tabs and stacks.
-This improves ergonomics of navigating in nested layouts that mix the two.
+This program lets you
+create one set of keybinds exclusively for cycling through tabs/stacks,
+and another set exclusively for navigating between splits.
+The result is that switching focus generally can be performed in one action
+rather than some sequence of `focus parent` and `focus [direction]` actions.
+
+## Installation
+
+Clone the repository,
+run `cargo build --release`,
+and copy the executable to a location in your`$PATH`
+(`~/.local/bin/` is probably a good choice).
+
+Commands can then be added to the config,
+e.g. `bindsym $mod+k exec sway_bfocus splitv backward nocycle`.
 
 ## Usage
 
@@ -20,7 +32,11 @@ that matches the layout target.
 
 ### Example
 
-An example setup:
+See below for a simple configuration.
+This setup doesn't handle stacks,
+but should be enough for most other use cases.
+Consider using a different keybind for focusing the previous tab,
+as the suggestion is dangerously close to `$mod+Shift+q`.
 
 Focus    | Keybind          |Command
 ---------|------------------|-----------------------------------------
@@ -30,21 +46,6 @@ left     | `$mod+h`         | `sway_bfocus splith backward nocycle`
 right    | `$mod+l`         | `sway_bfocus splith forward nocycle`
 prev tab | `$mod+Shift+Tab` | `sway_bfocus tabbed backward cycle`
 next tab | `$mod+Tab`       | `sway_bfocus tabbed forward cycle`
-
-Be wary of the keybind for focusing the previous tab,
-as it is dangerously close to `$mod+Shift+Q`.
-
-Remember to add `exec` in your sway config, 
-e.g. `$mod+k exec sway_bfocus splitv backward nocycle`
-
-
-## Installation
-Clone the repository, 
-run `cargo build --release`, 
-copy the executable to somewhere on `$PATH`. 
-(`~/.local/bin/` is probably a good choice). 
-
-
 
 ## TODO
 
