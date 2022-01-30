@@ -42,13 +42,18 @@ impl Tree {
             if t.layout == task.layout {
                 let branch_idx = focus_idx + num_children;
                 let branch_idx = if task.backward { branch_idx - 1 } else { branch_idx + 1 };
-                let branch_idx = if task.wrap {
-                    branch_idx % num_children
+                let branch_idx = if task.cycle {
+                    Some(branch_idx % num_children)
                 } else {
-                    branch_idx.max(num_children).min(num_children * 2 - 1) - num_children
+                    if branch_idx >= num_children && branch_idx < num_children * 2 {
+                        Some(branch_idx - num_children)
+                    } else {
+                        None
+                    }
                 };
-
-                target_child = Some(t.nodes.get(branch_idx).unwrap());
+                if let Some(branch_idx) = branch_idx {
+                    target_child = Some(t.nodes.get(branch_idx).unwrap());
+                }
             }
             t = &t.nodes[focus_idx];
         }
@@ -72,14 +77,14 @@ fn main() {
             cmd.spawn().unwrap().wait().unwrap();
         }
     } else {
-        println!("usage: swaytab (splith|splitv|tabbed|stacked) (forward|backward) (wrap|nowrap)");
+        println!("usage: swaytab (splith|splitv|tabbed|stacked) (forward|backward) (cycle|nocycle)");
     }
 }
 
 struct Task {
     layout: Layout,
     backward: bool,
-    wrap: bool,
+    cycle: bool,
 }
 
 fn parse_args() -> Option<Task> {
@@ -98,15 +103,15 @@ fn parse_args() -> Option<Task> {
                 "forward" => Some(false),
                 _ => None,
             }?;
-            let wrap = match args[3].as_str() {
-                "wrap" => Some(true),
-                "nowrap" => Some(false),
+            let cycle = match args[3].as_str() {
+                "cycle" => Some(true),
+                "nocycle" => Some(false),
                 _ => None,
             }?;
             Some(Task {
                 layout,
                 backward,
-                wrap,
+                cycle,
             })
         }
         _ => None,
