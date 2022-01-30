@@ -66,15 +66,15 @@ impl Tree {
 }
 
 fn main() {
-    let mut get_tree = Command::new("swaymsg");
-    get_tree.arg("-t").arg("get_tree");
-    let input = get_tree
-        .output()
-        .expect("failed to retrieve container tree");
-    let tree: Tree =
+    let args: Vec<String> = env::args().collect();
+    if let Some(task) = parse_args(&args) {
+        let mut get_tree = Command::new("swaymsg");
+        get_tree.arg("-t").arg("get_tree");
+        let input = get_tree
+            .output()
+            .expect("failed to retrieve container tree");
+        let tree: Tree =
         serde_json::from_slice(input.stdout.as_slice()).expect("failed to parse container tree");
-
-    if let Some(task) = parse_args() {
         if let Some(neighbor) = tree.find_neighbor(&task) {
             let mut cmd = Command::new("swaymsg");
             cmd.arg(format!("[con_id={neighbor}] focus"));
@@ -83,7 +83,8 @@ fn main() {
                 .expect("failed to send focus command");
         }
     } else {
-        println!("usage: sway_bettertabs (splith|splitv|tabbed|stacked) (forward|backward) (cycle|nocycle)");
+        let bin_name = &args[0];
+        println!("usage: {bin_name} (splith|splitv|tabbed|stacked) (forward|backward) (cycle|nocycle)");
     }
 }
 
@@ -93,8 +94,7 @@ struct Task {
     cycle: bool,
 }
 
-fn parse_args() -> Option<Task> {
-    let args: Vec<String> = env::args().collect();
+fn parse_args(args: &Vec<String>) -> Option<Task> {
     match args.len() {
         4 => {
             let layout = match args[1].as_str() {
