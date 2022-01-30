@@ -25,7 +25,11 @@ struct Tree {
 impl Tree {
     fn focus_idx(&self) -> Option<usize> {
         self.nodes.iter().enumerate().find_map(|(idx, child)| {
-            if child.id == self.focus[0] { Some(idx) } else { None }
+            if child.id == self.focus[0] {
+                Some(idx)
+            } else {
+                None
+            }
         })
     }
 
@@ -35,7 +39,9 @@ impl Tree {
         let mut t = self;
         let mut target_child = None;
         while let Some(focus_idx) = t.focus_idx() {
-            if t.focused { break; }
+            if t.focused {
+                break;
+            }
 
             let num_children = t.nodes.len();
             if t.layout == task.layout {
@@ -43,12 +49,10 @@ impl Tree {
                 let branch_idx = if task.backward { branch_idx - 1 } else { branch_idx + 1 };
                 let branch_idx = if task.cycle {
                     Some(branch_idx % num_children)
+                } else if branch_idx >= num_children && branch_idx < num_children * 2 {
+                    Some(branch_idx - num_children)
                 } else {
-                    if branch_idx >= num_children && branch_idx < num_children * 2 {
-                        Some(branch_idx - num_children)
-                    } else {
-                        None
-                    }
+                    None
                 };
                 if let Some(branch_idx) = branch_idx {
                     target_child = Some(t.nodes.get(branch_idx).unwrap());
@@ -66,16 +70,17 @@ impl Tree {
 }
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let args: Box<[String]> = env::args().collect();
     if let Some(task) = parse_args(&args) {
         let mut get_tree = Command::new("swaymsg");
         get_tree.arg("-t").arg("get_tree");
         let input = get_tree
             .output()
             .expect("failed to retrieve container tree");
-        let tree: Tree =
-        serde_json::from_slice(input.stdout.as_slice()).expect("failed to parse container tree");
+        let tree: Tree = serde_json::from_slice(input.stdout.as_slice())
+            .expect("failed to parse container tree");
         if let Some(neighbor) = tree.find_neighbor(&task) {
+            println!("{neighbor}");
             let mut cmd = Command::new("swaymsg");
             cmd.arg(format!("[con_id={neighbor}] focus"));
             cmd.spawn()
@@ -84,7 +89,9 @@ fn main() {
         }
     } else {
         let bin_name = &args[0];
-        println!("usage: {bin_name} (splith|splitv|tabbed|stacked) (forward|backward) (cycle|nocycle)");
+        println!(
+            "usage: {bin_name} (splith|splitv|tabbed|stacked) (forward|backward) (cycle|nocycle)"
+        );
     }
 }
 
@@ -94,7 +101,7 @@ struct Task {
     cycle: bool,
 }
 
-fn parse_args(args: &Vec<String>) -> Option<Task> {
+fn parse_args(args: &[String]) -> Option<Task> {
     match args.len() {
         4 => {
             let layout = match args[1].as_str() {
