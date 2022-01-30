@@ -77,10 +77,11 @@ fn main() {
         let input = get_tree
             .output()
             .expect("failed to retrieve container tree");
-        let tree: Tree = serde_json::from_slice(input.stdout.as_slice())
+        let mut tree: Tree = serde_json::from_slice(input.stdout.as_slice())
             .expect("failed to parse container tree");
+        tree.layout = Layout::Other; // ignore the topmost container
+
         if let Some(neighbor) = tree.find_neighbor(&task) {
-            println!("{neighbor}");
             let mut cmd = Command::new("swaymsg");
             cmd.arg(format!("[con_id={neighbor}] focus"));
             cmd.spawn()
