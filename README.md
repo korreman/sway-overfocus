@@ -1,9 +1,7 @@
 # `sway_bfocus`
 
-Better basic focusing commands for Sway WM.
+"Better" basic focusing commands for Sway WM.
 Proof of concept.
-
-## What/why?
 
 This program allows you to separate the action of moving between splits
 from the action of cycling through tabs and stacks.
