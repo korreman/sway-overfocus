@@ -24,15 +24,27 @@ An example setup:
 
 Focus    | Keybind          |Command
 ---------|------------------|-----------------------------------------
-up       | `$mod+k`         | `sway_bettertabs vsplit backward nocycle`
-down     | `$mod+j`         | `sway_bettertabs vsplit forward nocycle`
-left     | `$mod+h`         | `sway_bettertabs hsplit backward nocycle`
-right    | `$mod+l`         | `sway_bettertabs hsplit forward nocycle`
-prev tab | `$mod+Shift+Tab` | `sway_bettertabs tabbed backward cycle`
-next tab | `$mod+Tab`       | `sway_bettertabs tabbed forward cycle`
+up       | `$mod+k`         | `sway_bfocus splitv backward nocycle`
+down     | `$mod+j`         | `sway_bfocus splitv forward nocycle`
+left     | `$mod+h`         | `sway_bfocus splith backward nocycle`
+right    | `$mod+l`         | `sway_bfocus splith forward nocycle`
+prev tab | `$mod+Shift+Tab` | `sway_bfocus tabbed backward cycle`
+next tab | `$mod+Tab`       | `sway_bfocus tabbed forward cycle`
 
 Be wary of the keybind for focusing the previous tab,
 as it is dangerously close to `$mod+Shift+Q`.
+
+Remember to add `exec` in your sway config, 
+e.g. `$mod+k exec sway_bfocus splitv backward nocycle`
+
+
+## Installation
+Clone the repository, 
+run `cargo build --release`, 
+copy the executable to somewhere on `$PATH`. 
+(`~/.local/bin/` is probably a good choice). 
+
+
 
 ## TODO
 
