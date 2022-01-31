@@ -16,7 +16,7 @@ enum Layout {
 struct Task {
     layouts: Box<[Layout]>,
     backward: bool,
-    cycle: bool,
+    wrap: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -53,7 +53,7 @@ impl Tree {
             if task.layouts.contains(&t.layout) {
                 let branch_idx = focus_idx + num_children;
                 let branch_idx = if task.backward { branch_idx - 1 } else { branch_idx + 1 };
-                let branch_idx = if task.cycle {
+                let branch_idx = if task.wrap {
                     Some(branch_idx % num_children)
                 } else if branch_idx >= num_children && branch_idx < num_children * 2 {
                     Some(branch_idx - num_children)
@@ -73,6 +73,38 @@ impl Tree {
             child.id
         })
     }
+}
+
+fn parse_args(args: &[String]) -> Option<Task> {
+    if args.len() < 4 {
+        return None;
+    }
+    let backward = match args[1].as_str() {
+        "prev" => Some(true),
+        "next" => Some(false),
+        _ => None,
+    }?;
+    let wrap = match args[2].as_str() {
+        "wrap" => Some(true),
+        "nowrap" => Some(false),
+        _ => None,
+    }?;
+    let layouts: Box<[Layout]> = args[3..]
+        .iter()
+        .flat_map(|arg| match arg.as_str() {
+            "splith" => Some(Layout::SplitH),
+            "splitv" => Some(Layout::SplitV),
+            "tabbed" => Some(Layout::Tabbed),
+            "stacked" => Some(Layout::Stacked),
+            _ => None,
+        })
+        .collect();
+
+    Some(Task {
+        layouts,
+        backward,
+        wrap,
+    })
 }
 
 fn main() {
@@ -96,38 +128,6 @@ fn main() {
         }
     } else {
         let bin_name = &args[0];
-        println!(
-            "usage: {bin_name} (splith|splitv|tabbed|stacked) (forward|backward) (cycle|nocycle)"
-        );
-    }
-}
-
-fn parse_args(args: &[String]) -> Option<Task> {
-    match args.len() {
-        4 => {
-            let layout = match args[1].as_str() {
-                "splith" => Some(Layout::SplitH),
-                "splitv" => Some(Layout::SplitV),
-                "tabbed" => Some(Layout::Tabbed),
-                "stacked" => Some(Layout::Stacked),
-                _ => None,
-            }?;
-            let backward = match args[2].as_str() {
-                "backward" => Some(true),
-                "forward" => Some(false),
-                _ => None,
-            }?;
-            let cycle = match args[3].as_str() {
-                "cycle" => Some(true),
-                "nocycle" => Some(false),
-                _ => None,
-            }?;
-            Some(Task {
-                layouts: Box::new([layout]),
-                backward,
-                cycle,
-            })
-        }
-        _ => None,
+        println!("usage: {bin_name} (prev|next) (wrap|nowrap) (splith|splitv|tabbed|stacked)+");
     }
 }
