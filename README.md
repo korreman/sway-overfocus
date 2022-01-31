@@ -17,42 +17,38 @@ and copy the executable to a location in your`$PATH`
 (`~/.local/bin/` is probably a good choice).
 
 Commands can then be added to the config,
-e.g. `bindsym $mod+k exec sway_bfocus splitv backward nocycle`.
+e.g. `bindsym $mod+Tab exec sway_bfocus next wrap tabbed`.
 
 ## Usage
 
 ```
-sway_bfocus (splith|splitv|tabbed|stacked) (forward|backward) (cycle|nocycle)
+sway_bfocus (prev|next) (wrap|nowrap) (splith|splitv|tabbed|stacked)+
 ```
 
-The command takes a layout target, a direction, and a cycle setting.
-It works similarly to the regular focus commands,
+The command takes
+a direction, a wrapping setting, and one or more target layouts.
+It works like the regular focus commands,
 but will only focus neighbors in the first parent container
-that matches the layout target.
+that matches one of the layout targets.
 
-### Example
+### Example setup
 
-See below for a simple configuration.
-This setup doesn't handle stacks,
-but should be enough for most other use cases.
-Consider using a different keybind for focusing the previous tab,
-as the suggestion is dangerously close to `$mod+Shift+q`.
+The following setup should cover most use cases:
 
-Focus    | Keybind          |Command
----------|------------------|-----------------------------------------
-up       | `$mod+k`         | `sway_bfocus splitv backward nocycle`
-down     | `$mod+j`         | `sway_bfocus splitv forward nocycle`
-left     | `$mod+h`         | `sway_bfocus splith backward nocycle`
-right    | `$mod+l`         | `sway_bfocus splith forward nocycle`
-prev tab | `$mod+Shift+Tab` | `sway_bfocus tabbed backward cycle`
-next tab | `$mod+Tab`       | `sway_bfocus tabbed forward cycle`
+Focus          | Keybind          |Command
+---------------|------------------|---------------------------------------
+up             | `$mod+k`         | `sway_bfocus prev nowrap splitv`
+down           | `$mod+j`         | `sway_bfocus next nowrap splitv`
+left           | `$mod+h`         | `sway_bfocus prev nowrap splith`
+right          | `$mod+l`         | `sway_bfocus next nowrap splith`
+prev tab/stack | `$mod+Shift+Tab` | `sway_bfocus prev wrap tabbed stacked`
+next tab/stack | `$mod+Tab`       | `sway_bfocus next wrap tabbed stacked`
 
 ## TODO
 
 - Showcase video
 - Float support
-- Ignoring singletons
-- Multiple layout targets
+- Ignore singletons when wrapping
 - Directional focus between outputs
 - Workspace wraparound
 - Moving containers?
