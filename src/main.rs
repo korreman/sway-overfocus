@@ -13,6 +13,12 @@ enum Layout {
     Other,
 }
 
+struct Task {
+    layouts: Box<[Layout]>,
+    backward: bool,
+    cycle: bool,
+}
+
 #[derive(Debug, Deserialize)]
 struct Tree {
     id: u32,
@@ -44,7 +50,7 @@ impl Tree {
             }
 
             let num_children = t.nodes.len();
-            if t.layout == task.layout {
+            if task.layouts.contains(&t.layout) {
                 let branch_idx = focus_idx + num_children;
                 let branch_idx = if task.backward { branch_idx - 1 } else { branch_idx + 1 };
                 let branch_idx = if task.cycle {
@@ -96,12 +102,6 @@ fn main() {
     }
 }
 
-struct Task {
-    layout: Layout,
-    backward: bool,
-    cycle: bool,
-}
-
 fn parse_args(args: &[String]) -> Option<Task> {
     match args.len() {
         4 => {
@@ -123,7 +123,7 @@ fn parse_args(args: &[String]) -> Option<Task> {
                 _ => None,
             }?;
             Some(Task {
-                layout,
+                layouts: Box::new([layout]),
                 backward,
                 cycle,
             })
