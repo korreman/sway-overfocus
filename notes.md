@@ -29,6 +29,14 @@ All new target layouts:
 
     float, floath, floatv, output, outputh, outputv
 
+You could represent a focus target as
+(tabs and stacks are horizontal and vertical groups):
+
+    Movement = Type, Orientation, Direction, wrap?, traverse?
+    Type = split | group | float | output
+    Orientation = vertical | horizontal
+    Direction = next | previous
+
 ## Wrapping, DFS
 
 When spilling into a new output, say from the right,
@@ -51,3 +59,18 @@ in a way that is more consistent with how things look on screen.
 Then I'd consider doing up/down/left/right.
 But I think that might be impossible without making things too unpredictable
 or leaving containers unreachable.
+
+# Sway defaults
+
+Moving between floating containers will order containers on center axis,
+only on the relevant axis.
+
+Spilling into the next output will select the closest container
+rather than the inactive focus.
+
+Adjacent outputs are selected by the closest distance
+from center of current output to closest point within other outputs.
+
+At least that's what I think it's supposed to do.
+The `wlroots` code seems to be doing something kind of different.
+Honestly looks like a bug.
