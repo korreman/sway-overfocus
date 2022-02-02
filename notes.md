@@ -32,10 +32,11 @@ All new target layouts:
 You could represent a focus target as
 (tabs and stacks are horizontal and vertical groups):
 
-    Movement = Type, Orientation, Direction, wrap?, traverse?
+    Movement = Type, Orientation, Direction, Edgecase, traverse?
     Type = split | group | float | output
     Orientation = vertical | horizontal
     Direction = next | previous
+    Edgecase = stop | wrap | jump
 
 ## Wrapping, DFS
 
