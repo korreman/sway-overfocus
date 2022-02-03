@@ -38,6 +38,15 @@ You could represent a focus target as
     Direction = next | previous
     Edgecase = stop | wrap | jump
 
+Actually, more concise:
+
+    Movement = Type, Direction, wrap?, traverse?
+    Type = split | group | float | output
+    Direction = up | down | left | right
+
+With these systems,
+could you specify a command to cycle through tabs and stacks simultaneously?
+
 ## Wrapping, DFS
 
 When spilling into a new output, say from the right,
