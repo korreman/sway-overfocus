@@ -10,10 +10,10 @@ fn main() {
         let input = get_tree
             .output()
             .expect("failed to retrieve container tree");
-        let mut tree: Tree = serde_json::from_slice(input.stdout.as_slice())
+        let tree: PTree = serde_json::from_slice(input.stdout.as_slice())
             .expect("failed to parse container tree");
-        tree.layout = Layout::Other; // ignore the topmost container
-
+        let tree = tree.process().unwrap();
+        println!("{tree:#?}");
         if let Some(neighbor) = tree.neighbor(&targets) {
             let mut cmd = Command::new("swaymsg");
             cmd.arg(format!("[con_id={neighbor}] focus"));
@@ -27,6 +27,10 @@ fn main() {
             "usage: {bin_name} (splith|splitv|tabbed|stacked) (forward|backward) (cycle|nocycle)"
         );
     }
+}
+
+fn parse_args(args: &[String]) -> Option<Box<[Target]>> {
+    Some(Box::new([]))
 }
 
 // Command types
@@ -47,6 +51,7 @@ enum Kind {
 }
 
 // Tree types
+#[derive(Debug)]
 struct Tree {
     id: u32,
     layout: Layout,
@@ -56,7 +61,7 @@ struct Tree {
     nodes: Box<[Tree]>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 enum Layout {
     Group { vertical: bool },
     Split { vertical: bool },
@@ -65,7 +70,7 @@ enum Layout {
     Other,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Rect {
     pos: Vec2,
     dim: Vec2,
@@ -80,7 +85,7 @@ impl Rect {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Vec2 {
     x: i32,
     y: i32,
@@ -224,6 +229,147 @@ impl Tree {
     }
 }
 
-fn parse_args(args: &[String]) -> Option<Box<[Target]>> {
-    None
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum PLayout {
+    SplitH,
+    SplitV,
+    Stacked,
+    Tabbed,
+    Dockarea,
+    Output,
+    None,
+}
+
+impl PLayout {
+    fn process(&self) -> Layout {
+        match self {
+            PLayout::SplitH => Layout::Split { vertical: false },
+            PLayout::SplitV => Layout::Split { vertical: true },
+            PLayout::Tabbed => Layout::Group { vertical: false },
+            PLayout::Stacked => Layout::Group { vertical: true },
+            _ => Layout::Other,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum PType {
+    Root,
+    Output,
+    Con,
+    FloatingCon,
+    Workspace,
+    Dockarea,
+}
+
+#[derive(Debug, Deserialize)]
+struct PRect {
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+}
+
+impl PRect {
+    fn process(&self) -> Rect {
+        Rect {
+            pos: Vec2 {
+                x: self.x,
+                y: self.y,
+            },
+            dim: Vec2 {
+                x: self.width,
+                y: self.height,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct PTree {
+    id: u32,
+    name: Option<String>,
+    #[serde(rename = "type")]
+    ctype: PType,
+    layout: PLayout,
+    rect: PRect,
+    focused: bool,
+    focus: Box<[u32]>,
+    nodes: Box<[PTree]>,
+    floating_nodes: Box<[PTree]>,
+}
+
+impl PTree {
+    fn process(&self) -> Option<Tree> {
+        if self.name.as_ref().map(|name| name.starts_with("__i3")) == Some(true) {
+            return None;
+        }
+
+        let focus_id = self.focus.first();
+        let focus = if let Some(&id) = focus_id {
+            self.nodes
+                .iter()
+                .enumerate()
+                .find_map(|(idx, n)| if n.id == id { Some(idx) } else { None })
+        } else {
+            None
+        };
+
+        let float_focus = if let Some(&id) = focus_id {
+            self.floating_nodes.iter().enumerate().find_map(|(idx, n)| {
+                if n.id == id {
+                    Some(idx)
+                } else {
+                    None
+                }
+            })
+        } else {
+            None
+        };
+        let rect = self.rect.process();
+
+        let nodes = self.nodes.iter().flat_map(|n| n.process()).collect();
+        let float_nodes = self
+            .floating_nodes
+            .iter()
+            .flat_map(|n| n.process())
+            .collect();
+
+        let mut simple_tree = Tree {
+            id: self.id,
+            layout: self.layout.process(),
+            rect,
+            is_focused: self.focused,
+            focus,
+            nodes,
+        };
+
+        match self.ctype {
+            PType::Root => {
+                simple_tree.layout = Layout::Outputs;
+                Some(simple_tree)
+            }
+            PType::Workspace => Some(Tree {
+                id: self.id,
+                layout: Layout::Other,
+                rect,
+                is_focused: self.focused,
+                focus,
+                nodes: Box::new([
+                    simple_tree,
+                    Tree {
+                        id: self.id,
+                        layout: Layout::Floats,
+                        rect,
+                        is_focused: false,
+                        focus: float_focus,
+                        nodes: float_nodes,
+                    },
+                ]),
+            }),
+            _ => Some(simple_tree),
+        }
+    }
 }
