@@ -13,7 +13,6 @@ fn main() {
         let tree: PTree = serde_json::from_slice(input.stdout.as_slice())
             .expect("failed to parse container tree");
         let tree = tree.process().unwrap();
-        //println!("{tree:#?}");
         if let Some(neighbor) = tree.neighbor(&targets) {
             let mut cmd = Command::new("swaymsg");
             cmd.arg(format!("[con_id={neighbor}] focus"));
@@ -67,7 +66,7 @@ fn parse_args(args: &[String]) -> Option<Box<[Target]>> {
 }
 
 // Command types
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Target {
     kind: Kind,
     backward: bool,
@@ -75,7 +74,7 @@ struct Target {
     wrap: bool,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Kind {
     Split,
     Group,
@@ -130,6 +129,9 @@ impl Tree {
         let mut deepest_neighbor = None;
         while !t.is_focused {
             deepest_neighbor = t.local_neighbor(targets).or(deepest_neighbor);
+
+            let id = t.id;
+
             if let Some(new_t) = t.focus_next() {
                 t = new_t;
             } else {
@@ -146,7 +148,9 @@ impl Tree {
     fn focus_all(&self) -> &Tree {
         let mut t = self;
         while let Some(idx) = t.focus {
-            if !t.is_focused {
+            let id = t.id;
+
+            if t.is_focused {
                 break;
             }
             t = t.nodes.get(idx).expect("Focused child doesn't exist");
@@ -157,6 +161,7 @@ impl Tree {
     // Attempts to get a neighbor of focused child,
     // based on a list of targets.
     fn local_neighbor(&self, targets: &[Target]) -> Option<&Tree> {
+        let layout = self.layout;
         let target = *targets
             .iter()
             .find(|target| match (target.kind, self.layout) {
@@ -217,8 +222,9 @@ impl Tree {
                     .nodes
                     .iter()
                     .filter(|n| {
-                        let (a, b) = rearrange(n.rect, focused);
-                        component(a.pos) + component(a.dim) < component(b.pos)
+                        let nrect = n.rect;
+                        let (a, b) = rearrange(focused, n.rect);
+                        component(a.pos) + component(a.dim) <= component(b.pos)
                     })
                     .min_by_key(|n| {
                         let p = n.rect.closest_point(center);
@@ -230,8 +236,8 @@ impl Tree {
                         .nodes
                         .iter()
                         .filter(|n| {
-                            let (a, b) = rearrange(focused, n.rect);
-                            component(a.pos) + component(a.dim) < component(b.pos)
+                            let (a, b) = rearrange(n.rect, focused);
+                            component(a.pos) + component(a.dim) <= component(b.pos)
                         })
                         .max_by_key(|n| {
                             let p = n.rect.closest_point(center);
@@ -340,9 +346,16 @@ impl PTree {
             return None;
         }
 
+        let nodes: Box<[Tree]> = self.nodes.iter().flat_map(|n| n.process()).collect();
+        let float_nodes: Box<[Tree]> = self
+            .floating_nodes
+            .iter()
+            .flat_map(|n| n.process())
+            .collect();
+
         let focus_id = self.focus.first();
-        let focus = if let Some(&id) = focus_id {
-            self.nodes
+        let simple_focus = if let Some(&id) = focus_id {
+            nodes
                 .iter()
                 .enumerate()
                 .find_map(|(idx, n)| if n.id == id { Some(idx) } else { None })
@@ -351,31 +364,29 @@ impl PTree {
         };
 
         let float_focus = if let Some(&id) = focus_id {
-            self.floating_nodes.iter().enumerate().find_map(|(idx, n)| {
-                if n.id == id {
-                    Some(idx)
-                } else {
-                    None
-                }
-            })
+            float_nodes.iter().enumerate().find_map(
+                |(idx, n)| {
+                    if n.id == id {
+                        Some(idx)
+                    } else {
+                        None
+                    }
+                },
+            )
         } else {
             None
         };
-        let rect = self.rect.process();
 
-        let nodes = self.nodes.iter().flat_map(|n| n.process()).collect();
-        let float_nodes = self
-            .floating_nodes
-            .iter()
-            .flat_map(|n| n.process())
-            .collect();
+        let focus = Some(if simple_focus.is_some() { 0 } else { 1 });
+
+        let rect = self.rect.process();
 
         let mut simple_tree = Tree {
             id: self.id,
             layout: self.layout.process(),
             rect,
             is_focused: self.focused,
-            focus,
+            focus: simple_focus,
             nodes,
         };
 
