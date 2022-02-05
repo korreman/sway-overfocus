@@ -13,7 +13,7 @@ fn main() {
         let tree: PTree = serde_json::from_slice(input.stdout.as_slice())
             .expect("failed to parse container tree");
         let tree = tree.process().unwrap();
-        println!("{tree:#?}");
+        //println!("{tree:#?}");
         if let Some(neighbor) = tree.neighbor(&targets) {
             let mut cmd = Command::new("swaymsg");
             cmd.arg(format!("[con_id={neighbor}] focus"));
@@ -22,15 +22,48 @@ fn main() {
                 .expect("failed to send focus command");
         }
     } else {
-        let bin_name = &args[0];
-        println!(
-            "usage: {bin_name} (splith|splitv|tabbed|stacked) (forward|backward) (cycle|nocycle)"
-        );
+        let _bin_name = &args[0];
+        println!("usage message");
     }
 }
 
 fn parse_args(args: &[String]) -> Option<Box<[Target]>> {
-    Some(Box::new([]))
+    if args.len() < 2 {
+        return None;
+    }
+    let targets = args[1..].iter().map(|arg| {
+        let split = arg.split_once('-')?;
+        let kind = match split.0 {
+            "split" => Some(Kind::Split),
+            "group" => Some(Kind::Group),
+            "float" => Some(Kind::Float),
+            "output" => Some(Kind::Output),
+            _ => None,
+        }?;
+        if let [dir, wrap] = split.1.as_bytes() {
+            let (backward, vertical) = match dir {
+                0x75 => Some((true, true)),
+                0x64 => Some((false, true)),
+                0x6c => Some((true, false)),
+                0x72 => Some((false, false)),
+                _ => None,
+            }?;
+            let wrap = match wrap {
+                0x77 => Some(true),
+                0x73 => Some(false),
+                _ => None,
+            }?;
+            Some(Target {
+                kind,
+                backward,
+                vertical,
+                wrap,
+            })
+        } else {
+            None
+        }
+    });
+    targets.collect()
 }
 
 // Command types

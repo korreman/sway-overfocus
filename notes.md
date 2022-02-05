@@ -84,3 +84,15 @@ from center of current output to closest point within other outputs.
 At least that's what I think it's supposed to do.
 The `wlroots` code seems to be doing something kind of different.
 Honestly looks like a bug.
+
+
+# API
+
+This is the API I'm currently considering:
+
+    bindsym $mod+h sway_bfocus split-ls float-ls output-ls
+    bindsym $mod+j sway_bfocus split-ds float-ds output-ds
+    bindsym $mod+k sway_bfocus split-us float-us output-us
+    bindsym $mod+l sway_bfocus split-rs float-rs output-rs
+    bindsym $mod+Tab sway_bfocus group-rw group-dw
+    bindsym $mod+Shift+Tab sway_bfocus group-lw group-uw
