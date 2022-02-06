@@ -15,7 +15,9 @@ fn main() {
         let tree = tree.process().unwrap();
         if let Some(neighbor) = tree.neighbor(&targets) {
             let mut cmd = Command::new("swaymsg");
-            cmd.arg(format!("[con_id={neighbor}] focus"));
+            let focus_cmd = neighbor.focus_command().expect("no valid focus command");
+            println!("{focus_cmd}");
+            cmd.arg(focus_cmd);
             cmd.spawn()
                 .and_then(|mut p| p.wait())
                 .expect("failed to send focus command");
@@ -83,9 +85,11 @@ enum Kind {
 }
 
 // Tree types
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Tree {
     id: u32,
+    ctype: PType,
+    name: Option<String>,
     layout: Layout,
     rect: Rect,
     is_focused: bool,
@@ -124,32 +128,24 @@ struct Vec2 {
 }
 
 impl Tree {
-    fn neighbor(&self, targets: &[Target]) -> Option<u32> {
-        let mut t = self;
-        let mut deepest_neighbor = None;
-        while !t.is_focused {
-            deepest_neighbor = t.local_neighbor(targets).or(deepest_neighbor);
-
-            let id = t.id;
-
-            if let Some(new_t) = t.focus_next() {
-                t = new_t;
-            } else {
-                break;
-            }
-        }
-        Some(deepest_neighbor?.focus_all().id)
+    fn focus_command(&self) -> Option<String> {
+        let name = self.name.clone()?;
+        let id = self.id;
+        let cmd = match self.ctype {
+            PType::Root => None,
+            PType::Output => Some(format!("focus output {name}")),
+            PType::Workspace => Some(format!("workspace {name}")),
+            _ => Some(format!("[con_id={id}] focus")),
+        }?;
+        Some(cmd.to_string())
     }
-
-    fn focus_next(&self) -> Option<&Tree> {
+    fn focus_local(&self) -> Option<&Tree> {
         self.nodes.get(self.focus?)
     }
 
-    fn focus_all(&self) -> &Tree {
+    fn focus(&self) -> &Tree {
         let mut t = self;
         while let Some(idx) = t.focus {
-            let id = t.id;
-
             if t.is_focused {
                 break;
             }
@@ -158,10 +154,23 @@ impl Tree {
         t
     }
 
+    fn neighbor(&self, targets: &[Target]) -> Option<&Tree> {
+        let mut t = self;
+        let mut deepest_neighbor = None;
+        while !t.is_focused {
+            deepest_neighbor = t.neighbor_local(targets).or(deepest_neighbor);
+            if let Some(new_t) = t.focus_local() {
+                t = new_t;
+            } else {
+                break;
+            }
+        }
+        Some(deepest_neighbor?.focus())
+    }
+
     // Attempts to get a neighbor of focused child,
     // based on a list of targets.
-    fn local_neighbor(&self, targets: &[Target]) -> Option<&Tree> {
-        let layout = self.layout;
+    fn neighbor_local(&self, targets: &[Target]) -> Option<&Tree> {
         let target = *targets
             .iter()
             .find(|target| match (target.kind, self.layout) {
@@ -222,7 +231,6 @@ impl Tree {
                     .nodes
                     .iter()
                     .filter(|n| {
-                        let nrect = n.rect;
                         let (a, b) = rearrange(focused, n.rect);
                         component(a.pos) + component(a.dim) <= component(b.pos)
                     })
@@ -292,7 +300,7 @@ impl PLayout {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 enum PType {
     Root,
@@ -378,11 +386,12 @@ impl PTree {
         };
 
         let focus = Some(if simple_focus.is_some() { 0 } else { 1 });
-
         let rect = self.rect.process();
 
         let mut simple_tree = Tree {
             id: self.id,
+            name: self.name.clone(),
+            ctype: self.ctype,
             layout: self.layout.process(),
             rect,
             is_focused: self.focused,
@@ -397,6 +406,8 @@ impl PTree {
             }
             PType::Workspace => Some(Tree {
                 id: self.id,
+                ctype: self.ctype,
+                name: self.name.clone(),
                 layout: Layout::Other,
                 rect,
                 is_focused: self.focused,
@@ -404,6 +415,8 @@ impl PTree {
                 nodes: Box::new([
                     simple_tree,
                     Tree {
+                        ctype: self.ctype,
+                        name: self.name.clone(),
                         id: self.id,
                         layout: Layout::Floats,
                         rect,
