@@ -130,7 +130,7 @@ impl Tree {
                 let (a, b) = if target.backward { (b, a) } else { (a, b) };
                 match target.kind {
                     // TODO: Handle perfectly aligned floats.
-                    Kind::Float => middle(a) < middle(b),
+                    Kind::Float => middle(a) <= middle(b),
                     Kind::Output => component(a.pos) + component(a.dim) <= component(b.pos),
                     _ => unreachable!(),
                 }
@@ -149,19 +149,20 @@ impl Tree {
                 _ => unreachable!(),
             };
 
-            let mut res = self
-                .nodes
+            let mut nodes: Vec<&Tree> = self.nodes.iter().collect();
+            nodes.remove(self.focus?);
+
+            let mut res = nodes
                 .iter()
                 .filter(|n| pred(focused, n.rect))
                 .min_by_key(|n| dist(n.rect));
             if target.wrap {
-                res = res.or(self
-                    .nodes
+                res = res.or(nodes
                     .iter()
                     .filter(|n| pred(n.rect, focused))
                     .max_by_key(|n| dist(n.rect)));
             }
-            res
+            Some(*res?)
         } else {
             let len = self.nodes.len();
             let idx = self.focus? + len;
