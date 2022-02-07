@@ -121,98 +121,61 @@ impl Tree {
                 _ => false,
             })?;
 
-        match target {
-            Target {
-                kind: Kind::Float,
-                vertical,
-                backward,
-                wrap,
-            } => {
-                let get = |v: Vec2| if !vertical { v.x } else { v.y };
-                let center = |r: Rect| get(r.pos) + get(r.dim) / 2;
+        if target.kind == Kind::Float || target.kind == Kind::Output {
+            let component = |v: Vec2| if target.vertical { v.y } else { v.x };
+            let middle = |r: Rect| component(r.pos) + component(r.dim) / 2;
+            let focused = self.nodes[self.focus?].rect;
 
-                let sign = if !backward { 1 } else { -1 };
-                let focused = center(self.nodes[self.focus?].rect);
+            let pred = |a: Rect, b: Rect| {
+                let (a, b) = if target.backward { (b, a) } else { (a, b) };
+                match target.kind {
+                    // TODO: Handle perfectly aligned floats.
+                    Kind::Float => middle(a) < middle(b),
+                    Kind::Output => component(a.pos) + component(a.dim) <= component(b.pos),
+                    _ => unreachable!(),
+                }
+            };
 
-                let mut res = self
+            let dist = |n: Rect| match target.kind {
+                Kind::Float => (middle(n) - middle(focused)).saturating_abs(),
+                Kind::Output => {
+                    let center = Vec2 {
+                        x: focused.pos.x + focused.dim.x / 2,
+                        y: focused.pos.y + focused.dim.y / 2,
+                    };
+                    let p = n.closest_point(center);
+                    (center.x - p.x) * (center.x - p.x) + (center.y - p.y) * (center.y - p.y)
+                }
+                _ => unreachable!(),
+            };
+
+            let mut res = self
+                .nodes
+                .iter()
+                .filter(|n| pred(focused, n.rect))
+                .min_by_key(|n| dist(n.rect));
+            if target.wrap {
+                res = res.or(self
                     .nodes
                     .iter()
-                    .map(|n| ((center(n.rect) - focused) * sign, n))
-                    .filter(|&(d, _)| d > 0)
-                    .min_by_key(|&(d, _)| d);
-
-                if wrap {
-                    res = res.or(self
-                        .nodes
-                        .iter()
-                        .map(|n| (focused - (center(n.rect)) * sign, n))
-                        .filter(|&(d, _)| d < 0)
-                        .max_by_key(|&(d, _)| d))
-                };
-
-                Some(res?.1)
+                    .filter(|n| pred(n.rect, focused))
+                    .max_by_key(|n| dist(n.rect)));
             }
-
-            Target {
-                kind: Kind::Output,
-                backward,
-                vertical,
-                wrap,
-            } => {
-                let focused = self.nodes[self.focus?].rect;
-                let center = Vec2 {
-                    x: focused.pos.x + focused.dim.x / 2,
-                    y: focused.pos.y + focused.dim.y / 2,
-                };
-
-                let rearrange = |a: Rect, b: Rect| if backward { (b, a) } else { (a, b) };
-                let component = |r: Vec2| if vertical { r.y } else { r.x };
-
-                let mut res = self
-                    .nodes
-                    .iter()
-                    .filter(|n| {
-                        let (a, b) = rearrange(focused, n.rect);
-                        component(a.pos) + component(a.dim) <= component(b.pos)
-                    })
-                    .min_by_key(|n| {
-                        let p = n.rect.closest_point(center);
-                        (center.x - p.x) * (center.x - p.x) + (center.y - p.y) * (center.y - p.y)
-                    });
-
-                if wrap {
-                    res = res.or(self
-                        .nodes
-                        .iter()
-                        .filter(|n| {
-                            let (a, b) = rearrange(n.rect, focused);
-                            component(a.pos) + component(a.dim) <= component(b.pos)
-                        })
-                        .max_by_key(|n| {
-                            let p = n.rect.closest_point(center);
-                            (center.x - p.x) * (center.x - p.x)
-                                + (center.y - p.y) * (center.y - p.y)
-                        }));
-                };
-                res
-            }
-
-            // For groups and splits, simply go to previous or next child (and handle wrapping).
-            Target { backward, wrap, .. } => {
-                let len = self.nodes.len();
-                let idx = self.focus? + len;
-                let idx = if !backward { idx + 1 } else { idx - 1 };
-                let idx = if wrap {
-                    Some(idx % len)
+            res
+        } else {
+            let len = self.nodes.len();
+            let idx = self.focus? + len;
+            let idx = if target.backward { idx - 1 } else { idx + 1 };
+            let idx = if target.wrap {
+                Some(idx % len)
+            } else {
+                if len <= idx && idx < len * 2 {
+                    Some(idx - len)
                 } else {
-                    if len <= idx && idx < len * 2 {
-                        Some(idx - len)
-                    } else {
-                        None
-                    }
-                }?;
-                Some(&self.nodes[idx])
-            }
+                    None
+                }
+            }?;
+            Some(&self.nodes[idx])
         }
     }
 }

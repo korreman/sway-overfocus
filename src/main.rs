@@ -21,7 +21,6 @@ fn main() {
         if let Some(neighbor) = tree.neighbor(&targets) {
             let mut cmd = Command::new("swaymsg");
             let focus_cmd = neighbor.focus_command().expect("no valid focus command");
-            println!("{focus_cmd}");
             cmd.arg(focus_cmd);
             cmd.spawn()
                 .and_then(|mut p| p.wait())
