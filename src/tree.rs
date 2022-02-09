@@ -203,9 +203,9 @@ impl Tree {
                     if target.kind == Kind::Float {
                         let center = |n: &&Tree| {
                             if target.vertical {
-                                n.rect.pos.x + n.rect.dim.x / 2
-                            } else {
                                 n.rect.pos.y + n.rect.dim.y / 2
+                            } else {
+                                n.rect.pos.x + n.rect.dim.x / 2
                             }
                         };
 
