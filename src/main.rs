@@ -4,29 +4,38 @@ use std::process::Command;
 mod tree;
 use tree::{Kind, Target, Tree};
 
-fn main() {
+#[derive(Debug)]
+enum Error {
+    Args,
+    Retrieve,
+    Parse,
+    Neighbor,
+    Command,
+    Message,
+}
+
+fn main() -> Result<(), Error> {
     let args: Box<[String]> = env::args().collect();
-    if let Some(targets) = parse_args(&args) {
-        let mut get_tree = Command::new("swaymsg");
-        get_tree.arg("-t").arg("get_tree");
-        let input = get_tree
-            .output()
-            .expect("failed to retrieve container tree");
-        let mut tree: Tree = serde_json::from_slice(input.stdout.as_slice())
-            .expect("failed to parse container tree");
-        tree.reform();
-        if let Some(neighbor) = tree.neighbor(&targets) {
-            let mut cmd = Command::new("swaymsg");
-            let focus_cmd = neighbor.focus_command().expect("no valid focus command");
-            cmd.arg(focus_cmd);
-            cmd.spawn()
-                .and_then(|mut p| p.wait())
-                .expect("failed to send focus command");
-        }
-    } else {
-        let _bin_name = &args[0];
-        println!("usage message");
-    }
+    let targets = parse_args(&args).ok_or(Error::Args)?;
+    let mut get_tree = Command::new("swaymsg");
+    get_tree.arg("-t").arg("get_tree");
+    let input = get_tree.output().ok().ok_or(Error::Retrieve)?;
+
+    let mut tree: Tree = serde_json::from_slice(input.stdout.as_slice())
+        .ok()
+        .ok_or(Error::Parse)?;
+    tree.reform();
+    let neighbor = tree.neighbor(&targets).ok_or(Error::Neighbor)?;
+
+    let mut cmd = Command::new("swaymsg");
+    let focus_cmd = neighbor.focus_command().ok_or(Error::Command)?;
+    cmd.arg(focus_cmd);
+    cmd.spawn()
+        .and_then(|mut p| p.wait())
+        .ok()
+        .ok_or(Error::Message)?;
+
+    Ok(())
 }
 
 fn parse_args(args: &[String]) -> Option<Box<[Target]>> {
