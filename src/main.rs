@@ -2,7 +2,7 @@ use std::env;
 use std::process::Command;
 
 mod tree;
-use tree::{Kind, Target, Tree};
+use tree::{EdgeMode, Kind, Target, Tree};
 
 #[derive(Debug)]
 enum Error {
@@ -19,6 +19,7 @@ fn main() -> Result<(), Error> {
     let targets = parse_args(&args).ok_or(Error::Args)?;
     let mut get_tree = Command::new("swaymsg");
     get_tree.arg("-t").arg("get_tree");
+
     let input = get_tree.output().ok().ok_or(Error::Retrieve)?;
 
     let mut tree: Tree = serde_json::from_slice(input.stdout.as_slice())
@@ -59,16 +60,18 @@ fn parse_args(args: &[String]) -> Option<Box<[Target]>> {
                 0x72 => Some((false, false)),
                 _ => None,
             }?;
-            let wrap = match wrap {
-                0x77 => Some(true),
-                0x73 => Some(false),
+            let edge_mode = match wrap {
+                0x73 => Some(EdgeMode::Stop),
+                0x77 => Some(EdgeMode::Wrap),
+                0x74 => Some(EdgeMode::Traverse),
+                0x69 => Some(EdgeMode::Inactive),
                 _ => None,
             }?;
             Some(Target {
                 kind,
                 backward,
                 vertical,
-                wrap,
+                edge_mode,
             })
         } else {
             None

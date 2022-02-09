@@ -7,7 +7,7 @@ pub struct Target {
     pub kind: Kind,
     pub backward: bool,
     pub vertical: bool,
-    pub wrap: bool,
+    pub edge_mode: EdgeMode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,6 +18,15 @@ pub enum Kind {
     Output,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EdgeMode {
+    Stop,
+    Wrap,
+    Traverse,
+    Inactive,
+}
+
+// Tree types
 #[derive(Deserialize)]
 #[serde(rename_all = "lowercase")]
 enum PLayout {
@@ -185,10 +194,41 @@ impl Tree {
         self.nodes.get(self.focus_idx()?)
     }
 
-    fn follow_focus(&self) -> &Tree {
+    fn select_leaf(&self, targets: &[Target]) -> &Tree {
         let mut t = self;
-        while let Some(new_t) = t.focus_local() {
-            t = new_t
+        loop {
+            let target = t.match_targets(targets);
+            let new_t = match target {
+                Some(target) if target.edge_mode == EdgeMode::Traverse => {
+                    if target.kind == Kind::Float {
+                        let center = |n: &&Tree| {
+                            if target.vertical {
+                                n.rect.pos.x + n.rect.dim.x / 2
+                            } else {
+                                n.rect.pos.y + n.rect.dim.y / 2
+                            }
+                        };
+
+                        if target.backward {
+                            t.nodes.iter().max_by_key(center)
+                        } else {
+                            t.nodes.iter().min_by_key(center)
+                        }
+                    } else {
+                        if target.backward {
+                            t.nodes.last()
+                        } else {
+                            t.nodes.first()
+                        }
+                    }
+                }
+                _ => t.focus_local(),
+            };
+            if let Some(new_t) = new_t {
+                t = new_t;
+            } else {
+                break;
+            }
         }
         t
     }
@@ -210,7 +250,7 @@ impl Tree {
             .iter()
             .rev()
             .find_map(|(t, p)| p.neighbor_local(&t));
-        Some(neighbor?.follow_focus())
+        Some(neighbor?.select_leaf(&targets))
     }
 
     fn match_targets(&self, targets: &[Target]) -> Option<Target> {
@@ -230,7 +270,7 @@ impl Tree {
     fn neighbor_local(&self, target: &Target) -> Option<&Tree> {
         let focus_idx = self.focus_idx()?;
 
-        if target.kind == Kind::Float || target.kind == Kind::Output {
+        let res = if target.kind == Kind::Float || target.kind == Kind::Output {
             let component = |v: Vec2| if target.vertical { v.y } else { v.x };
             let middle = |r: Rect| component(r.pos) + component(r.dim) / 2;
             let focused = self.nodes[focus_idx].rect;
@@ -265,18 +305,18 @@ impl Tree {
                 .iter()
                 .filter(|n| pred(focused, n.rect))
                 .min_by_key(|n| dist(n.rect));
-            if target.wrap {
+            if target.edge_mode == EdgeMode::Wrap {
                 res = res.or(nodes
                     .iter()
                     .filter(|n| pred(n.rect, focused))
                     .max_by_key(|n| dist(n.rect)));
             }
-            Some(*res?)
+            res.map(|&n| n)
         } else {
             let len = self.nodes.len();
             let idx = focus_idx + len;
             let idx = if target.backward { idx - 1 } else { idx + 1 };
-            let idx = if target.wrap {
+            let idx = if target.edge_mode == EdgeMode::Wrap {
                 Some(idx % len)
             } else {
                 if len <= idx && idx < len * 2 {
@@ -284,8 +324,9 @@ impl Tree {
                 } else {
                     None
                 }
-            }?;
-            Some(&self.nodes[idx])
-        }
+            };
+            idx.map(|idx| &self.nodes[idx])
+        };
+        res.or(if target.edge_mode == EdgeMode::Stop { self.focus_local() } else { None })
     }
 }
