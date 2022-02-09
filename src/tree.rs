@@ -146,6 +146,7 @@ impl Tree {
                 nodes_node.id = 0;
                 nodes_node.nodes = nodes;
                 nodes_node.focus = focus_nodes.into_boxed_slice();
+
                 let mut floats_node = workspace.clone();
                 floats_node.id = 1;
                 floats_node.nodes = floats;
@@ -194,22 +195,26 @@ impl Tree {
 
     pub fn neighbor(&self, targets: &[Target]) -> Option<&Tree> {
         let mut t = self;
-        let mut deepest_neighbor = None;
+        let mut matching_parents = Vec::new();
         while !t.focused {
-            deepest_neighbor = t.neighbor_local(targets).or(deepest_neighbor);
+            if let Some(target) = t.match_targets(targets) {
+                matching_parents.push((target, t));
+            }
             if let Some(new_t) = t.focus_local() {
                 t = new_t;
             } else {
                 break;
             }
         }
-        Some(deepest_neighbor?.follow_focus())
+        let neighbor = matching_parents
+            .iter()
+            .rev()
+            .find_map(|(t, p)| p.neighbor_local(&t));
+        Some(neighbor?.follow_focus())
     }
 
-    // Attempts to get a neighbor of focused child,
-    // based on a list of targets.
-    fn neighbor_local(&self, targets: &[Target]) -> Option<&Tree> {
-        let target = *targets
+    fn match_targets(&self, targets: &[Target]) -> Option<Target> {
+        let res = *targets
             .iter()
             .find(|target| match (target.kind, self.layout) {
                 (Kind::Float, Layout::Floats) | (Kind::Output, Layout::Root) => true,
@@ -217,7 +222,12 @@ impl Tree {
                 | (Kind::Group, Layout::Group { vertical }) => vertical == target.vertical,
                 _ => false,
             })?;
+        Some(res)
+    }
 
+    // Attempts to get a neighbor of focused child,
+    // based on a list of targets.
+    fn neighbor_local(&self, target: &Target) -> Option<&Tree> {
         let focus_idx = self.focus_idx()?;
 
         if target.kind == Kind::Float || target.kind == Kind::Output {
