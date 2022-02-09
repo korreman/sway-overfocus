@@ -17,7 +17,8 @@ Build with `cargo build --release` using `rustc` v1.58 or higher.
 Copy the binary from `target/release/sway_bfocus`
 to a location in your `$PATH`,
 typically `~/.local/bin`.
-Then insert/replace keybinds to run `exec "sway_bfocus..."` commands.
+Then insert/replace keybinds to run `exec "sway_bfocus..."` commands
+in your sway configuration.
 
 See the [usage](usage.md) page for details on constructing focus commands.
 The following config section is a good starting point,
