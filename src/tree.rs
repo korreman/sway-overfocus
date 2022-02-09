@@ -171,13 +171,12 @@ impl Tree {
     pub fn focus_command(&self) -> Option<String> {
         let name = self.name.clone()?;
         let id = self.id;
-        let cmd = match self.ctype {
+        match self.ctype {
             Type::Root => None,
             Type::Output => Some(format!("focus output {name}")),
             Type::Workspace => Some(format!("workspace {name}")),
             _ => Some(format!("[con_id={id}] focus")),
-        }?;
-        Some(cmd.to_string())
+        }
     }
 
     fn focus_idx(&self) -> Option<usize> {
@@ -214,12 +213,10 @@ impl Tree {
                         } else {
                             t.nodes.iter().min_by_key(center)
                         }
+                    } else if target.backward {
+                        t.nodes.last()
                     } else {
-                        if target.backward {
-                            t.nodes.last()
-                        } else {
-                            t.nodes.first()
-                        }
+                        t.nodes.first()
                     }
                 }
                 _ => t.focus_local(),
@@ -249,8 +246,8 @@ impl Tree {
         let neighbor = matching_parents
             .iter()
             .rev()
-            .find_map(|(t, p)| p.neighbor_local(&t));
-        Some(neighbor?.select_leaf(&targets))
+            .find_map(|(t, p)| p.neighbor_local(t));
+        Some(neighbor?.select_leaf(targets))
     }
 
     fn match_targets(&self, targets: &[Target]) -> Option<Target> {
@@ -306,24 +303,23 @@ impl Tree {
                 .filter(|n| pred(focused, n.rect))
                 .min_by_key(|n| dist(n.rect));
             if target.edge_mode == EdgeMode::Wrap {
-                res = res.or(nodes
+                let wrap_target = nodes
                     .iter()
                     .filter(|n| pred(n.rect, focused))
-                    .max_by_key(|n| dist(n.rect)));
+                    .max_by_key(|n| dist(n.rect));
+                res = res.or(wrap_target);
             }
-            res.map(|&n| n)
+            res.copied()
         } else {
             let len = self.nodes.len();
             let idx = focus_idx + len;
             let idx = if target.backward { idx - 1 } else { idx + 1 };
             let idx = if target.edge_mode == EdgeMode::Wrap {
                 Some(idx % len)
+            } else if len <= idx && idx < len * 2 {
+                Some(idx - len)
             } else {
-                if len <= idx && idx < len * 2 {
-                    Some(idx - len)
-                } else {
-                    None
-                }
+                None
             };
             idx.map(|idx| &self.nodes[idx])
         };
