@@ -2,10 +2,7 @@ use std::env;
 use std::process::Command;
 
 mod tree;
-use tree::{Kind, Target};
-
-mod parse;
-use parse::PTree;
+use tree::{Kind, Target, Tree};
 
 fn main() {
     let args: Box<[String]> = env::args().collect();
@@ -15,9 +12,9 @@ fn main() {
         let input = get_tree
             .output()
             .expect("failed to retrieve container tree");
-        let tree: PTree = serde_json::from_slice(input.stdout.as_slice())
+        let mut tree: Tree = serde_json::from_slice(input.stdout.as_slice())
             .expect("failed to parse container tree");
-        let tree = tree.process().unwrap();
+        tree.reform();
         if let Some(neighbor) = tree.neighbor(&targets) {
             let mut cmd = Command::new("swaymsg");
             let focus_cmd = neighbor.focus_command().expect("no valid focus command");
