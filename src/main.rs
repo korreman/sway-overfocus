@@ -14,7 +14,21 @@ enum Error {
     Message,
 }
 
-fn main() -> Result<(), Error> {
+fn main() {
+    match task() {
+        Err(e) => match e {
+            Error::Args => eprint!("{}", include_str!("../usage.md")),
+            Error::Retrieve => eprintln!("error: failed to acquire container tree"),
+            Error::Parse => eprintln!("error: failed to parse container tree"),
+            Error::Command => eprintln!("error: no valid focus command"),
+            Error::Message => eprintln!("error: failed to message WM"),
+            Error::Neighbor => ()
+        },
+        Ok(()) => (),
+    }
+}
+
+fn task() -> Result<(), Error> {
     let args: Box<[String]> = env::args().collect();
     let targets = parse_args(&args).ok_or(Error::Args)?;
     let mut get_tree = Command::new("swaymsg");

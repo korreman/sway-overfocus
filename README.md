@@ -1,7 +1,6 @@
 # `sway_bfocus`
 
 "Better" tab and stack navigation for Sway WM.
-Proof of concept.
 
 This program lets you
 create one set of keybinds exclusively for cycling through tabs/stacks,
@@ -9,50 +8,33 @@ and another set exclusively for navigating between splits.
 The result is that switching focus generally can be performed in one action
 rather than some sequence of `focus parent` and `focus [direction]` actions.
 
-## Installation
+## Installation instructions
 
-Clone the repository,
-run `cargo build --release`,
-and copy the executable to a location in your`$PATH`
-(`~/.local/bin/` is probably a good choice).
+The project compiles to a standalone binary
+that interfaces with Sway using `swaymsg`.
 
-Commands can then be added to the config,
-e.g. `bindsym $mod+k exec sway_bfocus splitv backward nocycle`.
+Build with `cargo build --release` using `rustc` v1.58 or higher.
+Copy the binary from `target/release/sway_bfocus`
+to a location in your `$PATH`,
+typically `~/.local/bin`.
+Then insert/replace keybinds to run `exec "sway_bfocus..."` commands.
 
-## Usage
+See the [usage](usage.md) page for details on constructing focus commands.
+The following config section is a good starting point,
+but commands can be configured granularly.
 
-```
-sway_bfocus (splith|splitv|tabbed|stacked) (forward|backward) (cycle|nocycle)
-```
-
-The command takes a layout target, a direction, and a cycle setting.
-It works similarly to the regular focus commands,
-but will only focus neighbors in the first parent container
-that matches the layout target.
-
-### Example
-
-See below for a simple configuration.
-This setup doesn't handle stacks,
-but should be enough for most other use cases.
-Consider using a different keybind for focusing the previous tab,
-as the suggestion is dangerously close to `$mod+Shift+q`.
-
-Focus    | Keybind          |Command
----------|------------------|-----------------------------------------
-up       | `$mod+k`         | `sway_bfocus splitv backward nocycle`
-down     | `$mod+j`         | `sway_bfocus splitv forward nocycle`
-left     | `$mod+h`         | `sway_bfocus splith backward nocycle`
-right    | `$mod+l`         | `sway_bfocus splith forward nocycle`
-prev tab | `$mod+Shift+Tab` | `sway_bfocus tabbed backward cycle`
-next tab | `$mod+Tab`       | `sway_bfocus tabbed forward cycle`
+    bindsym $mod+h exec 'sway_bfocus split-lt float-lt output-ls'
+    bindsym $mod+j exec 'sway_bfocus split-dt float-dt output-ds'
+    bindsym $mod+k exec 'sway_bfocus split-ut float-ut output-us'
+    bindsym $mod+l exec 'sway_bfocus split-rt float-rt output-rs'
+    bindsym $mod+Tab exec 'sway_bfocus group-lw group-dw'
+    bindsym $mod+Shift+Tab exec 'sway_bfocus group-rw group-uw'
 
 ## TODO
 
+For feature requests, open an issue.
+
 - Showcase video
-- Float support
 - Ignoring singletons
-- Multiple layout targets
-- Directional focus between outputs
-- Workspace wraparound
 - Moving containers?
+
