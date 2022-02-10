@@ -22,7 +22,7 @@ fn main() {
             Error::Parse => eprintln!("error: failed to parse container tree"),
             Error::Command => eprintln!("error: no valid focus command"),
             Error::Message => eprintln!("error: failed to message WM"),
-            Error::Neighbor => ()
+            Error::Neighbor => (),
         },
         Ok(()) => (),
     }
@@ -30,7 +30,7 @@ fn main() {
 
 fn task() -> Result<(), Error> {
     let args: Box<[String]> = env::args().collect();
-    let targets = parse_args(&args).ok_or(Error::Args)?;
+    let (i3, targets) = parse_args(&args).ok_or(Error::Args)?;
     let mut get_tree = Command::new("swaymsg");
     get_tree.arg("-t").arg("get_tree");
 
@@ -42,7 +42,7 @@ fn task() -> Result<(), Error> {
     tree.reform();
     let neighbor = tree.neighbor(&targets).ok_or(Error::Neighbor)?;
 
-    let mut cmd = Command::new("swaymsg");
+    let mut cmd = Command::new(if i3 { "i3-msg" } else { "swaymsg" });
     let focus_cmd = neighbor.focus_command().ok_or(Error::Command)?;
     cmd.arg(focus_cmd);
     cmd.spawn()
@@ -53,11 +53,16 @@ fn task() -> Result<(), Error> {
     Ok(())
 }
 
-fn parse_args(args: &[String]) -> Option<Box<[Target]>> {
-    if args.len() < 2 {
-        return None;
-    }
-    let targets = args[1..].iter().map(|arg| {
+fn parse_args(args: &[String]) -> Option<(bool, Box<[Target]>)> {
+    let (i3, args) = if args.len() > 2 && args[1] == "--i3" {
+        Some((true, &args[2..]))
+    } else if args.len() > 1 {
+        Some((false, &args[1..]))
+    } else {
+        None
+    }?;
+
+    let targets = args.iter().map(|arg| {
         let split = arg.split_once('-')?;
         let kind = match split.0 {
             "split" => Some(Kind::Split),
@@ -91,5 +96,6 @@ fn parse_args(args: &[String]) -> Option<Box<[Target]>> {
             None
         }
     });
-    targets.collect()
+    let targets: Option<Box<[Target]>> = targets.collect();
+    Some((i3, targets?))
 }

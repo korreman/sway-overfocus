@@ -1,8 +1,8 @@
 # `sway_bfocus`
 
-"Better" tab and stack navigation for Sway WM.
+"Better" focus navigation for the Sway and i3 window managers.
 
-This program lets you
+The primary objective of this program is to
 create one set of keybinds exclusively for cycling through tabs/stacks,
 and another set exclusively for navigating between splits.
 The result is that switching focus generally can be performed in one action
@@ -22,7 +22,7 @@ in your sway configuration.
 
 See the [usage](usage.md) page for details on constructing focus commands.
 The following config section is a good starting point,
-but commands can be configured granularly.
+but commands can be configured granularly to suit your needs.
 
     bindsym $mod+h exec 'sway_bfocus split-lt float-lt output-ls'
     bindsym $mod+j exec 'sway_bfocus split-dt float-dt output-ds'
@@ -37,5 +37,5 @@ For feature requests, open an issue.
 
 - Showcase video
 - Ignoring singletons
-- Moving containers?
+- Moving containers
 
