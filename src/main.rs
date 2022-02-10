@@ -1,8 +1,10 @@
 use std::env;
 use std::process::Command;
 
+mod algorithm;
+use algorithm::{EdgeMode, Kind, Target};
 mod tree;
-use tree::{EdgeMode, Kind, Target, Tree};
+use tree::Tree;
 
 #[derive(Debug)]
 enum Error {
@@ -40,7 +42,7 @@ fn task() -> Result<(), Error> {
         .ok()
         .ok_or(Error::Parse)?;
     tree.reform();
-    let neighbor = tree.neighbor(&targets).ok_or(Error::Neighbor)?;
+    let neighbor = algorithm::neighbor(&tree, &targets).ok_or(Error::Neighbor)?;
 
     let mut cmd = Command::new(if i3 { "i3-msg" } else { "swaymsg" });
     let focus_cmd = neighbor.focus_command().ok_or(Error::Command)?;
