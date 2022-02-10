@@ -33,9 +33,6 @@ but commands can be configured granularly to suit your needs.
 
 ## TODO
 
-For feature requests, open an issue.
-
 - Showcase video
 - Ignoring singletons
 - Moving containers
-
