@@ -1,6 +1,5 @@
-use super::tree::{Tree, Layout, Rect, Vec2};
+use super::tree::{Layout, Rect, Tree, Vec2};
 
-// Command types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Target {
     pub kind: Kind,
@@ -39,7 +38,7 @@ fn match_targets(tree: &Tree, targets: &[Target]) -> Option<Target> {
 
 fn select_leaf<'a>(mut t: &'a Tree, targets: &[Target]) -> &'a Tree {
     loop {
-        let target = match_targets(&t, targets);
+        let target = match_targets(t, targets);
         let new_t = match target {
             Some(target) if target.edge_mode == EdgeMode::Traverse => {
                 if target.kind == Kind::Float {
@@ -73,9 +72,10 @@ fn select_leaf<'a>(mut t: &'a Tree, targets: &[Target]) -> &'a Tree {
 }
 
 pub fn neighbor<'a>(mut t: &'a Tree, targets: &[Target]) -> Option<&'a Tree> {
+    // Traverse down the tree, following the focus path.
     let mut matching_parents = Vec::new();
     while !t.focused {
-        if let Some(target) = match_targets(&t, targets) {
+        if let Some(target) = match_targets(t, targets) {
             matching_parents.push((target, t));
         }
         if let Some(new_t) = t.focus_local() {
@@ -84,11 +84,18 @@ pub fn neighbor<'a>(mut t: &'a Tree, targets: &[Target]) -> Option<&'a Tree> {
             break;
         }
     }
-    let neighbor = matching_parents
-        .iter()
-        .rev()
-        .find_map(|(t, p)| neighbor_local(&p, t));
-    Some(select_leaf(neighbor?, targets))
+    // Search backwards through the stack of parents with a matching neighbor.
+    // Returns an `Option<Option<_>>`,
+    // `Some(None)` is used to stop early if matching a target with `EdgeMode::Stop`.
+    let neighbor = matching_parents.iter().rev().find_map(|(t, p)| {
+        let n = neighbor_local(p, t);
+        if t.edge_mode == EdgeMode::Stop {
+            Some(n)
+        } else {
+            n.map(Some)
+        }
+    });
+    Some(select_leaf(neighbor??, targets))
 }
 
 // Attempts to get a neighbor of focused child,
@@ -96,7 +103,7 @@ pub fn neighbor<'a>(mut t: &'a Tree, targets: &[Target]) -> Option<&'a Tree> {
 fn neighbor_local<'a>(tree: &'a Tree, target: &Target) -> Option<&'a Tree> {
     let focus_idx = tree.focus_idx()?;
 
-    let res = if target.kind == Kind::Float || target.kind == Kind::Output {
+    if target.kind == Kind::Float || target.kind == Kind::Output {
         let component = |v: Vec2| if target.vertical { v.y } else { v.x };
         let middle = |r: Rect| component(r.pos) + component(r.dim) / 2;
         let focused = tree.nodes[focus_idx].rect;
@@ -151,7 +158,5 @@ fn neighbor_local<'a>(tree: &'a Tree, target: &Target) -> Option<&'a Tree> {
             None
         };
         idx.map(|idx| &tree.nodes[idx])
-    };
-    res.or(if target.edge_mode == EdgeMode::Stop { tree.focus_local() } else { None })
+    }
 }
-

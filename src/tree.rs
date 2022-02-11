@@ -43,7 +43,7 @@ impl From<PLayout> for Layout {
     }
 }
 
-#[derive(Debug, Deserialize, Clone, Copy)]
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Type {
     Root,
@@ -108,6 +108,7 @@ pub struct Tree {
     pub focus: Box<[u32]>,
     pub nodes: Box<[Tree]>,
     pub floating_nodes: Box<[Tree]>,
+    pub fullscreen_mode: u8,
 }
 
 impl Tree {

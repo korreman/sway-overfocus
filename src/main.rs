@@ -18,6 +18,9 @@ enum Error {
 
 fn main() {
     match task() {
+        // TODO:
+        // - Remove (no)Neighbor from errors.
+        // - Set exit code to non-zero.
         Err(e) => match e {
             Error::Args => eprint!("{}", include_str!("../usage.md")),
             Error::Retrieve => eprintln!("error: failed to acquire container tree"),
