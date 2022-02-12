@@ -66,17 +66,20 @@ fn task() -> Result<(), FocusError> {
 }
 
 fn parse_args(args: &[String]) -> Option<(bool, Box<[Target]>)> {
+    // Check argument count and `--i3` flag
     let (i3, args) = if args.len() > 2 && args[1] == "--i3" {
-        Some((true, &args[2..]))
+        (true, &args[2..])
     } else if args.len() > 1 {
-        Some((false, &args[1..]))
+        (false, &args[1..])
     } else {
-        None
-    }?;
+        return None;
+    };
 
-    let targets = args.iter().map(|arg| {
-        let split = arg.split_once('-')?;
-        let kind = match split.0 {
+    // All subsequent arguments are layout targets,
+    // so we can map parsing to the remaining slice.
+    let targets: Option<Box<[Target]>> = args.iter().map(|arg| {
+        let (target_name, mode_chars) = arg.split_once('-')?;
+        let kind = match target_name {
             "split" => Some(Kind::Split),
             "group" => Some(Kind::Group),
             "float" => Some(Kind::Float),
@@ -84,31 +87,28 @@ fn parse_args(args: &[String]) -> Option<(bool, Box<[Target]>)> {
             "output" => Some(Kind::Output),
             _ => None,
         }?;
-        if let [dir, wrap] = split.1.as_bytes() {
-            let (backward, vertical) = match dir {
-                0x75 => Some((true, true)),
-                0x64 => Some((false, true)),
-                0x6c => Some((true, false)),
-                0x72 => Some((false, false)),
-                _ => None,
-            }?;
-            let edge_mode = match wrap {
-                0x73 => Some(EdgeMode::Stop),
-                0x77 => Some(EdgeMode::Wrap),
-                0x74 => Some(EdgeMode::Traverse),
-                0x69 => Some(EdgeMode::Inactive),
-                _ => None,
-            }?;
-            Some(Target {
-                kind,
-                backward,
-                vertical,
-                edge_mode,
-            })
-        } else {
-            None
-        }
-    });
-    let targets: Option<Box<[Target]>> = targets.collect();
+        let mut mode_chars = mode_chars.chars();
+        let (backward, vertical) = match mode_chars.next()? {
+            'r' => Some((false, false)),
+            'l' => Some((true, false)),
+            'd' => Some((false, true)),
+            'u' => Some((true, true)),
+            _ => None,
+        }?;
+        let edge_mode = match mode_chars.next()? {
+            's' => Some(EdgeMode::Stop),
+            'w' => Some(EdgeMode::Wrap),
+            't' => Some(EdgeMode::Traverse),
+            'i' => Some(EdgeMode::Inactive),
+            _ => None,
+        }?;
+        Some(Target {
+            kind,
+            backward,
+            vertical,
+            edge_mode,
+        })
+    }).collect();
+
     Some((i3, targets?))
 }
