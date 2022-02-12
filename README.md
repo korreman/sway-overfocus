@@ -13,7 +13,7 @@ rather than some sequence of `focus parent` and `focus [direction]` actions.
 ## Installation instructions
 
 The project compiles to a standalone binary
-that interfaces with the WM using using `swaymsg`
+that interfaces with the WM using `swaymsg`
 (or `i3-msg` when given an `--i3` flag).
 
 Build with `cargo build --release` using `rustc` v1.58 or higher.
