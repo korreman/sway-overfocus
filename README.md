@@ -35,5 +35,4 @@ but commands can be configured granularly to suit your needs.
 ## TODO
 
 - Showcase video
-- Ignoring singletons
 - Moving containers

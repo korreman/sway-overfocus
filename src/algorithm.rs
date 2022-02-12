@@ -76,7 +76,9 @@ pub fn neighbor<'a>(mut t: &'a Tree, targets: &[Target]) -> Option<&'a Tree> {
     let mut matching_parents = Vec::new();
     while !t.focused {
         if let Some(target) = match_targets(t, targets) {
-            matching_parents.push((target, t));
+            if t.nodes.len() > 1 {
+                matching_parents.push((target, t));
+            }
         }
         if let Some(new_t) = t.focus_local() {
             t = new_t;
