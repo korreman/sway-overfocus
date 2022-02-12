@@ -137,9 +137,9 @@ impl Tree {
         }
     }
 
-    /// Reform the tree to ready for traversal.
-    /// 1. Root node is marked as such.
-    /// 2. Workspace floats are changed into "regular" nodes in a subtree.
+    /// Reform the tree to prepare for traversal.
+    /// 1. Top node is marked as `Root`.
+    /// 2. Workspace floats are moved to "regular" nodes in a separate subtree.
     /// 3. Fullscreen children replace their entire workspace
     ///    (global fullscreen replaces the entire tree).
     pub fn reform(mut self) -> Tree {

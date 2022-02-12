@@ -8,9 +8,9 @@ pub struct Target {
     pub kind: Kind,
     /// Whether to find the succeeding or preceding neighbor.
     pub backward: bool,
-    /// Whether to search horizontally or vertically.
+    /// Whether to switch horizontally or vertically.
     pub vertical: bool,
-    /// Edge container handling.
+    /// Moving-into-edge handling.
     pub edge_mode: EdgeMode,
 }
 
@@ -23,7 +23,7 @@ pub enum Kind {
     Output,
 }
 
-/// Describes what to do when attempting to move past the last or first child of matching parents.
+/// Describes what to do when attempting to move past the last or first child of a container.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EdgeMode {
     /// Do nothing, don't change focus.
@@ -66,7 +66,7 @@ pub fn neighbor<'a>(mut t: &'a Tree, targets: &[Target]) -> Option<&'a Tree> {
     Some(select_leaf(neighbor??, targets))
 }
 
-/// Finds a parent that contains direct children one of the `targets`.
+/// Finds a parent that contains direct children matching one of the `targets`.
 fn match_targets(tree: &Tree, targets: &[Target]) -> Option<Target> {
     let res = *targets
         .iter()
