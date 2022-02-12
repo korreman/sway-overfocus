@@ -84,7 +84,7 @@ fn match_targets(tree: &Tree, targets: &[Target]) -> Option<Target> {
     Some(res)
 }
 
-/// Tries to find a neighbor of the locally focused child in `tree`,
+/// Tries to find a neighbor of the focused child of the top node in `tree`,
 /// according to the given target.
 fn neighbor_local<'a>(tree: &'a Tree, target: &Target) -> Option<&'a Tree> {
     let focus_idx = tree.focus_idx()?;
@@ -167,7 +167,7 @@ fn neighbor_local<'a>(tree: &'a Tree, target: &Target) -> Option<&'a Tree> {
     }
 }
 
-/// Find a leaf in a presumed neighboring container, respecting target edge-modes
+/// Find a leaf in a (presumed) neighboring container, respecting target edge-modes
 fn select_leaf<'a>(mut t: &'a Tree, targets: &[Target]) -> &'a Tree {
     loop {
         // Match the current node with targets
