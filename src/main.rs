@@ -7,54 +7,61 @@ mod tree;
 use tree::Tree;
 
 #[derive(Debug)]
-enum Error {
+enum FocusError {
     Args,
     Retrieve,
     Parse,
-    Neighbor,
     Command,
     Message,
 }
 
 fn main() {
     match task() {
-        // TODO:
-        // - Remove (no)Neighbor from errors.
-        // - Set exit code to non-zero.
-        Err(e) => match e {
-            Error::Args => eprint!("{}", include_str!("../usage.md")),
-            Error::Retrieve => eprintln!("error: failed to acquire container tree"),
-            Error::Parse => eprintln!("error: failed to parse container tree"),
-            Error::Command => eprintln!("error: no valid focus command"),
-            Error::Message => eprintln!("error: failed to message WM"),
-            Error::Neighbor => (),
-        },
+        Err(e) => {
+            match e {
+                FocusError::Args => eprint!("{}", include_str!("../usage.md")),
+                FocusError::Retrieve => eprintln!("error: failed to acquire container tree"),
+                FocusError::Parse => eprintln!("error: failed to parse container tree"),
+                FocusError::Command => eprintln!("error: no valid focus command"),
+                FocusError::Message => eprintln!("error: failed to message WM"),
+            };
+            std::process::exit(1);
+        }
         Ok(()) => (),
     }
 }
 
-fn task() -> Result<(), Error> {
+fn task() -> Result<(), FocusError> {
+    // Parse arguments into config and targets
     let args: Box<[String]> = env::args().collect();
-    let (i3, targets) = parse_args(&args).ok_or(Error::Args)?;
+    let (i3, targets) = parse_args(&args).ok_or(FocusError::Args)?;
+
+    // Retrieve tree
     let mut get_tree = Command::new("swaymsg");
     get_tree.arg("-t").arg("get_tree");
+    let input = get_tree.output().ok().ok_or(FocusError::Retrieve)?;
 
-    let input = get_tree.output().ok().ok_or(Error::Retrieve)?;
-
+    // Parsing
     let tree: Tree = serde_json::from_slice(input.stdout.as_slice())
         .ok()
-        .ok_or(Error::Parse)?;
+        .ok_or(FocusError::Parse)?;
+
+    // Pre-process
     let tree = tree.reform();
-    let neighbor = algorithm::neighbor(&tree, &targets).ok_or(Error::Neighbor)?;
 
-    let mut cmd = Command::new(if i3 { "i3-msg" } else { "swaymsg" });
-    let focus_cmd = neighbor.focus_command().ok_or(Error::Command)?;
-    cmd.arg(focus_cmd);
-    cmd.spawn()
-        .and_then(|mut p| p.wait())
-        .ok()
-        .ok_or(Error::Message)?;
-
+    // Look for neighbor using targets
+    if let Some(neighbor) = algorithm::neighbor(&tree, &targets) {
+        // Run focus command for found neighbor
+        let mut cmd = Command::new(if i3 { "i3-msg" } else { "swaymsg" });
+        let focus_cmd = neighbor.focus_command().ok_or(FocusError::Command)?;
+        cmd.arg(focus_cmd);
+        cmd.spawn()
+            .and_then(|mut p| p.wait())
+            .ok()
+            .ok_or(FocusError::Message)?;
+    } else {
+        println!("no neighbor to focus");
+    }
     Ok(())
 }
 
