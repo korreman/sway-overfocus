@@ -1,7 +1,8 @@
+//! Tree types, parsing, and pre-processing.
 use serde::Deserialize;
 use std::mem;
 
-// Tree types
+/// Parsed layout, immediately converted to [Layout].
 #[derive(Deserialize)]
 #[serde(rename_all = "lowercase")]
 enum PLayout {
@@ -14,19 +15,24 @@ enum PLayout {
     Other,
 }
 
+/// Re-interpreted layout.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(from = "PLayout")]
 pub enum Layout {
+    /// Holds outputs.
     Root,
+    /// Holds workspaces.
     Output,
+    /// Holds floating containers as regular nodes.
     Floats,
+    /// `hsplith` and `vsplit` container.
     Split {
         vertical: bool,
     },
+    /// Horizontal groups are tabbed, vertical groups are stacking.
     Group {
         vertical: bool,
     },
-    #[serde(other)]
     Other,
 }
 
@@ -45,7 +51,7 @@ impl From<PLayout> for Layout {
 
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum Type {
+pub enum ContainerType {
     Root,
     Output,
     Con,
@@ -54,6 +60,7 @@ pub enum Type {
     Dockarea,
 }
 
+/// Parsed rectangles, immediately converted to [Rect].
 #[derive(Deserialize)]
 struct PRect {
     x: i32,
@@ -62,6 +69,7 @@ struct PRect {
     height: i32,
 }
 
+/// Bounding boxes of containers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(from = "PRect")]
 pub struct Rect {
@@ -70,6 +78,7 @@ pub struct Rect {
 }
 
 impl From<PRect> for Rect {
+    /// Conversion only changes the data layout.
     fn from(r: PRect) -> Rect {
         Rect {
             pos: Vec2 { x: r.x, y: r.y },
@@ -82,10 +91,11 @@ impl From<PRect> for Rect {
 }
 
 impl Rect {
+    /// Closest point to `p` within the rectangle.
     pub fn closest_point(&self, p: Vec2) -> Vec2 {
         Vec2 {
-            x: i32::clamp(p.x, self.pos.x, self.pos.x + self.dim.x),
-            y: i32::clamp(p.y, self.pos.y, self.pos.y + self.dim.y),
+            x: i32::clamp(p.x, self.pos.x, self.pos.x + self.dim.x - 1),
+            y: i32::clamp(p.y, self.pos.y, self.pos.y + self.dim.y - 1),
         }
     }
 }
@@ -96,38 +106,64 @@ pub struct Vec2 {
     pub y: i32,
 }
 
+/// Container tree, representing output from `-t get_tree`.
 #[derive(Debug, Deserialize, Clone)]
 pub struct Tree {
     pub id: u32,
     pub name: Option<String>,
+    /// Needed for generating appropiate focus commands.
     #[serde(rename = "type")]
-    pub ctype: Type,
+    pub con_type: ContainerType,
     pub layout: Layout,
     pub rect: Rect,
     pub focused: bool,
     pub focus: Box<[u32]>,
     pub nodes: Vec<Tree>,
+    /// Only workspaces should contain these, before preprocessing.
     pub floating_nodes: Box<[Tree]>,
     pub fullscreen_mode: u8,
 }
 
 impl Tree {
+    /// Generate a command that will focus the top node.
+    pub fn focus_command(&self) -> Option<String> {
+        let name = self.name.clone()?;
+        let id = self.id;
+        match self.con_type {
+            ContainerType::Root => None,
+            ContainerType::Output => Some(format!("focus output {name}")),
+            ContainerType::Workspace => Some(format!("workspace {name}")),
+            _ => Some(format!("[con_id={id}] focus")),
+        }
+    }
+
+    /// Reform the tree to ready for traversal.
+    /// 1. Root node is marked as such.
+    /// 2. Workspace floats are changed into "regular" nodes in a subtree.
+    /// 3. Fullscreen children replace their entire workspace
+    ///    (global fullscreen replaces the entire tree).
     pub fn reform(mut self) -> Tree {
         self.layout = Layout::Root;
         for output in self.nodes.iter_mut() {
             for workspace in output.nodes.iter_mut() {
-                // Make into a parent that holds regular nodes and floating nodes in two subtrees.
+                // Split regular nodes and floating nodes into two subtrees with a new parent.
                 let focus = mem::take(&mut workspace.focus);
                 let nodes = mem::take(&mut workspace.nodes);
                 let floats = mem::take(&mut workspace.floating_nodes);
 
+                // Delegate focus history out to subtrees for regular nodes and floats.
                 let (focus_nodes, focus_floats): (Vec<u32>, Vec<u32>) = focus
                     .iter()
                     .partition(|id| nodes.iter().any(|n| n.id == **id));
 
+                // Set focus of parent based on which new subtree contains latest focused child.
+                // Subtrees are given IDs 0 and 1.
+                // This is fine as the parent is assigned the layout `Other`,
+                // and the subtrees can therefore never be selected as focus targets.
                 workspace.focus =
                     Box::new(if focus.first() == focus_nodes.first() { [0, 1] } else { [1, 0] });
 
+                // Subtrees inherit most properties from the original.
                 let mut nodes_node = workspace.clone();
                 nodes_node.id = 0;
                 nodes_node.nodes = nodes;
@@ -150,11 +186,11 @@ impl Tree {
                     if fullscreen_node.fullscreen_mode == 2 {
                         return fullscreen_node;
                     }
-                    // Preserve ID, type, and name when replacing.
-                    // If the fullscreened node needs to be focused,
-                    // it will be so indirectly through the workspace.
+                    // Preserve workspace ID, type, and name when replacing.
+                    // If the fullscreen node is a focus target,
+                    // it will be focused indirectly through the workspace name.
                     fullscreen_node.id = workspace.id;
-                    fullscreen_node.ctype = Type::Workspace;
+                    fullscreen_node.con_type = ContainerType::Workspace;
                     fullscreen_node.name = mem::take(&mut workspace.name);
                     *workspace = fullscreen_node;
                 }
@@ -163,8 +199,9 @@ impl Tree {
         self
     }
 
-    // Search for a child that is fullscreen.
-    // Also return whether the fullscreen mode is global.
+    /// Search the tree for a child that is fullscreen.
+    /// If found, the child is detached and returned.
+    /// Neighbors of the child are detached and dropped as collateral.
     pub fn extract_fullscreen_child(&mut self) -> Option<Tree> {
         if self.nodes.iter().any(|node| node.fullscreen_mode != 0) {
             let nodes = mem::take(&mut self.nodes);
@@ -180,17 +217,8 @@ impl Tree {
         }
     }
 
-    pub fn focus_command(&self) -> Option<String> {
-        let name = self.name.clone()?;
-        let id = self.id;
-        match self.ctype {
-            Type::Root => None,
-            Type::Output => Some(format!("focus output {name}")),
-            Type::Workspace => Some(format!("workspace {name}")),
-            _ => Some(format!("[con_id={id}] focus")),
-        }
-    }
-
+    /// Compute the index (_not_ identifier) of the focused node in child array,
+    /// if any.
     pub fn focus_idx(&self) -> Option<usize> {
         self.nodes.iter().enumerate().find_map(|(idx, n)| {
             if n.id == *self.focus.first()? {
@@ -201,6 +229,7 @@ impl Tree {
         })
     }
 
+    /// Return the focused child, if any.
     pub fn focus_local(&self) -> Option<&Tree> {
         self.nodes.get(self.focus_idx()?)
     }
