@@ -36,5 +36,4 @@ but commands can be configured granularly to suit your needs.
 
 ## TODO
 
-- Showcase video
 - Moving containers
