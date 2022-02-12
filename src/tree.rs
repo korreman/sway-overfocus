@@ -106,16 +106,17 @@ pub struct Tree {
     pub rect: Rect,
     pub focused: bool,
     pub focus: Box<[u32]>,
-    pub nodes: Box<[Tree]>,
+    pub nodes: Vec<Tree>,
     pub floating_nodes: Box<[Tree]>,
     pub fullscreen_mode: u8,
 }
 
 impl Tree {
-    pub fn reform(&mut self) {
+    pub fn reform(mut self) -> Tree {
         self.layout = Layout::Root;
         for output in self.nodes.iter_mut() {
             for workspace in output.nodes.iter_mut() {
+                // Make into a parent that holds regular nodes and floating nodes in two subtrees.
                 let focus = mem::take(&mut workspace.focus);
                 let nodes = mem::take(&mut workspace.nodes);
                 let floats = mem::take(&mut workspace.floating_nodes);
@@ -131,16 +132,47 @@ impl Tree {
                 nodes_node.id = 0;
                 nodes_node.nodes = nodes;
                 nodes_node.focus = focus_nodes.into_boxed_slice();
+                nodes_node.fullscreen_mode = 0;
 
                 let mut floats_node = workspace.clone();
                 floats_node.id = 1;
-                floats_node.nodes = floats;
+                floats_node.nodes = floats.to_vec();
                 floats_node.focus = focus_floats.into_boxed_slice();
                 floats_node.layout = Layout::Floats;
+                floats_node.fullscreen_mode = 0;
 
-                workspace.nodes = Box::new([nodes_node, floats_node]);
+                workspace.nodes = vec![nodes_node, floats_node];
                 workspace.layout = Layout::Other;
+
+                // For any workspace with a fullscreen child, replace it with said child.
+                if let Some(mut fullscreen_node) = workspace.extract_fullscreen_child() {
+                    // If the node is global fullscreen, it replaces the entire tree.
+                    if fullscreen_node.fullscreen_mode == 2 {
+                        return fullscreen_node;
+                    }
+                    // Give the fullscreen node the ID of the workspace to preserve focusing.
+                    fullscreen_node.id = workspace.id;
+                    *workspace = fullscreen_node;
+                }
             }
+        }
+        self
+    }
+
+    // Search for a child that is fullscreen.
+    // Also return whether the fullscreen mode is global.
+    pub fn extract_fullscreen_child(&mut self) -> Option<Tree> {
+        if self.nodes.iter().any(|node| node.fullscreen_mode != 0) {
+            let nodes = mem::take(&mut self.nodes);
+            let node: Tree = nodes
+                .into_iter()
+                .find(|node| node.fullscreen_mode != 0)
+                .unwrap();
+            Some(node)
+        } else {
+            self.nodes
+                .iter_mut()
+                .find_map(|n| n.extract_fullscreen_child())
         }
     }
 

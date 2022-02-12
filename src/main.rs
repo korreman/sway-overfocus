@@ -41,10 +41,10 @@ fn task() -> Result<(), Error> {
 
     let input = get_tree.output().ok().ok_or(Error::Retrieve)?;
 
-    let mut tree: Tree = serde_json::from_slice(input.stdout.as_slice())
+    let tree: Tree = serde_json::from_slice(input.stdout.as_slice())
         .ok()
         .ok_or(Error::Parse)?;
-    tree.reform();
+    let tree = tree.reform();
     let neighbor = algorithm::neighbor(&tree, &targets).ok_or(Error::Neighbor)?;
 
     let mut cmd = Command::new(if i3 { "i3-msg" } else { "swaymsg" });
