@@ -2,6 +2,8 @@
 
 "Better" focus navigation for the Sway and i3 window managers.
 
+![Demo GIF](demo.gif)
+
 The primary objective of this program is to
 create one set of keybinds exclusively for cycling through tabs/stacks,
 and another set exclusively for navigating between splits.
