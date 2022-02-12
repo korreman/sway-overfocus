@@ -13,6 +13,7 @@ pub enum Kind {
     Split,
     Group,
     Float,
+    Workspace,
     Output,
 }
 
@@ -28,7 +29,9 @@ fn match_targets(tree: &Tree, targets: &[Target]) -> Option<Target> {
     let res = *targets
         .iter()
         .find(|target| match (target.kind, tree.layout) {
-            (Kind::Float, Layout::Floats) | (Kind::Output, Layout::Root) => true,
+            (Kind::Float, Layout::Floats)
+            | (Kind::Workspace, Layout::Output)
+            | (Kind::Output, Layout::Root) => true,
             (Kind::Split, Layout::Split { vertical })
             | (Kind::Group, Layout::Group { vertical }) => vertical == target.vertical,
             _ => false,

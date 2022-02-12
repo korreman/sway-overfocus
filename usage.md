@@ -11,6 +11,7 @@ Layout:
     split - horizontal and vertical splits
     group - tabs (horizontal) and stacks (vertical)
     float - floating containers
+    workspace - workspaces, right/down is next, left/up is previous
     output - outputs
 
 Direction:

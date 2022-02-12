@@ -73,6 +73,7 @@ fn parse_args(args: &[String]) -> Option<(bool, Box<[Target]>)> {
             "split" => Some(Kind::Split),
             "group" => Some(Kind::Group),
             "float" => Some(Kind::Float),
+            "workspace" => Some(Kind::Workspace),
             "output" => Some(Kind::Output),
             _ => None,
         }?;
