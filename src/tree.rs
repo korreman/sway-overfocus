@@ -150,8 +150,12 @@ impl Tree {
                     if fullscreen_node.fullscreen_mode == 2 {
                         return fullscreen_node;
                     }
-                    // Give the fullscreen node the ID of the workspace to preserve focusing.
+                    // Preserve ID, type, and name when replacing.
+                    // If the fullscreened node needs to be focused,
+                    // it will be so indirectly through the workspace.
                     fullscreen_node.id = workspace.id;
+                    fullscreen_node.ctype = Type::Workspace;
+                    fullscreen_node.name = mem::take(&mut workspace.name);
                     *workspace = fullscreen_node;
                 }
             }
