@@ -90,6 +90,7 @@ fn neighbor_local<'a>(tree: &'a Tree, target: &Target) -> Option<&'a Tree> {
     let focus_idx = tree.focus_idx()?;
 
     if target.kind == Kind::Float || target.kind == Kind::Output {
+        let focus_id = *tree.focus.first()?;
         let focused = tree.nodes[focus_idx].rect;
 
         // Floats and outputs are chosen based on dimensions and position.
@@ -101,53 +102,67 @@ fn neighbor_local<'a>(tree: &'a Tree, target: &Target) -> Option<&'a Tree> {
         // Computes the middle across the selected component
         let middle = |r: Rect| component(r.pos) + component(r.dim) / 2;
 
-        // TODO: Handle perfectly aligned floats
         // Filtering predicate
-        let pred = |a: Rect, b: Rect| {
-            let (a, b) = if target.backward { (b, a) } else { (a, b) };
-            match target.kind {
-                // For floats, the middle must be past the focused middle on the chosen axis
-                Kind::Float => middle(a) <= middle(b),
-                // For outputs, their rects must be strictly past the focused rect
-                Kind::Output => component(a.pos) + component(a.dim) <= component(b.pos),
-                _ => unreachable!(),
-            }
+        let pred = |t: &Tree, flip: bool| {
+            let (a, b) = if flip { (t.rect, focused) } else { (focused, t.rect) };
+            t.id != focus_id // Discard currently focused node
+                && match target.kind {
+                    // For floats, the middle must be past the focused middle on the chosen axis
+                    Kind::Float => {
+                        // If perfectly aligned, IDs are used for bounds checks as well
+                        let id_bound = flip == (focus_id < t.id);
+                        middle(a) < middle(b) || (middle(a) == middle(b) && id_bound)
+                    }
+                    // For outputs, their rects must be strictly past the focused rect
+                    Kind::Output => component(a.pos) + component(a.dim) <= component(b.pos),
+                    _ => unreachable!(),
+                }
         };
 
         // Distance measure
-        let dist = |n: Rect| match target.kind {
-            // Floats are chosen by component-wise distance
-            Kind::Float => (middle(n) - middle(focused)).saturating_abs(),
-            // Outputs are chosen by euclidean distance from focused center to closest point
-            Kind::Output => {
-                let center = Vec2 {
-                    x: focused.pos.x + focused.dim.x / 2,
-                    y: focused.pos.y + focused.dim.y / 2,
-                };
-                let p = n.closest_point(center);
-                (center.x - p.x) * (center.x - p.x) + (center.y - p.y) * (center.y - p.y)
-            }
-            _ => unreachable!(),
+        let dist_key = |t: &Tree, flip: bool| {
+            let pos_dist = match target.kind {
+                // Floats are chosen by component-wise distance
+                Kind::Float => (middle(t.rect) - middle(focused)).saturating_abs(),
+                // Outputs are chosen by euclidean distance from focused center to closest point
+                Kind::Output => {
+                    let center = Vec2 {
+                        x: focused.pos.x + focused.dim.x / 2,
+                        y: focused.pos.y + focused.dim.y / 2,
+                    };
+                    let p = t.rect.closest_point(center);
+                    (center.x - p.x) * (center.x - p.x) + (center.y - p.y) * (center.y - p.y)
+                }
+                _ => unreachable!(),
+            };
+            // IDs are included to resolve ties
+            let id_order = if flip { t.id } else { u32::MAX - t.id };
+            (pos_dist, id_order)
         };
 
-        // Only select from nodes besides the focused one
-        let mut nodes: Vec<&Tree> = tree.nodes.iter().collect();
-        nodes.remove(focus_idx);
-
         // Filter by predicate and select closest node
-        let mut res = nodes
+        let mut res = tree
+            .nodes
             .iter()
-            .filter(|n| pred(focused, n.rect))
-            .min_by_key(|n| dist(n.rect));
+            .filter(|n| pred(n, target.backward))
+            .min_by_key(|n| dist_key(n, target.backward));
         // If wrapping, filter by flipped (not negated) predicate and select furthest node
         if target.edge_mode == EdgeMode::Wrap {
-            let wrap_target = nodes
+            let wrap_target = tree
+                .nodes
                 .iter()
-                .filter(|n| pred(n.rect, focused))
-                .max_by_key(|n| dist(n.rect));
+                .filter(|n| pred(n, !target.backward))
+                .max_by_key(|n| dist_key(n, !target.backward));
             res = res.or(wrap_target);
         }
-        res.copied()
+        let ids = tree.nodes.iter().map(|n| n.id).collect::<Vec<u32>>();
+        println!(
+            "Current: {}, New: {:?}, All: {:?}",
+            focus_id,
+            res.map(|n| n.id),
+            ids
+        );
+        res
     } else {
         // The remaining targets can be chosen by index, disregarding verticality
         let len = tree.nodes.len();
