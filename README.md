@@ -31,5 +31,5 @@ but commands can be configured granularly to suit your needs.
     bindsym $mod+j exec 'sway_bfocus split-dt float-dt output-ds'
     bindsym $mod+k exec 'sway_bfocus split-ut float-ut output-us'
     bindsym $mod+l exec 'sway_bfocus split-rt float-rt output-rs'
-    bindsym $mod+Tab exec 'sway_bfocus group-lw group-dw'
-    bindsym $mod+Shift+Tab exec 'sway_bfocus group-rw group-uw'
+    bindsym $mod+Tab exec 'sway_bfocus group-rw group-dw'
+    bindsym $mod+Shift+Tab exec 'sway_bfocus group-lw group-uw'
