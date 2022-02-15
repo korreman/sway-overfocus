@@ -33,7 +33,3 @@ but commands can be configured granularly to suit your needs.
     bindsym $mod+l exec 'sway_bfocus split-rt float-rt output-rs'
     bindsym $mod+Tab exec 'sway_bfocus group-lw group-dw'
     bindsym $mod+Shift+Tab exec 'sway_bfocus group-rw group-uw'
-
-## TODO
-
-- Moving containers
