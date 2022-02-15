@@ -1,12 +1,14 @@
 # `sway-overfocus`
 
-"Better" focus navigation for the Sway and i3 window managers.
+Alternative basic focus movement for the sway and i3 window managers.
 
 ![Demo GIF](demo.gif)
 
-The primary objective of this program is to
+The primary goal of this program is to
 create one set of keybinds exclusively for cycling through tabs/stacks,
 and another set exclusively for navigating between splits.
+This is accomplished by providing custom focus commands
+that target only specific layouts.
 The result is that switching focus generally can be performed in one action
 rather than some sequence of `focus parent` and `focus [direction]` actions.
 
