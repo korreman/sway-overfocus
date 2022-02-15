@@ -194,17 +194,18 @@ fn select_leaf<'a>(mut t: &'a Tree, targets: &[Target]) -> &'a Tree {
             Some(target) if target.edge_mode == EdgeMode::Traverse => {
                 // For floats, this entails finding the left/right/top/bottom-most node
                 if target.kind == Kind::Float {
-                    let center = |n: &&Tree| {
-                        if target.vertical {
+                    let key = |n: &&Tree| {
+                        let center = if target.vertical {
                             n.rect.pos.y + n.rect.dim.y / 2
                         } else {
                             n.rect.pos.x + n.rect.dim.x / 2
-                        }
+                        };
+                        (center, u32::MAX - n.id)
                     };
                     if target.backward {
-                        t.nodes.iter().max_by_key(center)
+                        t.nodes.iter().max_by_key(key)
                     } else {
-                        t.nodes.iter().min_by_key(center)
+                        t.nodes.iter().min_by_key(key)
                     }
                 // We don't handle outputs, as we will never move from one `Root` to another.
                 // For other container types, we can just select the first or last.
