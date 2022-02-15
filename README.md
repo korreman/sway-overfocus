@@ -1,4 +1,4 @@
-# `sway_bfocus`
+# `sway-overfocus`
 
 "Better" focus navigation for the Sway and i3 window managers.
 
@@ -17,19 +17,19 @@ that interfaces with the WM using `swaymsg`
 (or `i3-msg` when given an `--i3` flag).
 
 Build with `cargo build --release` using `rustc` v1.58 or higher.
-Copy the binary from `target/release/sway_bfocus`
+Copy the binary from `target/release/sway-overfocus`
 to a location in your `$PATH`,
 typically `~/.local/bin`.
-Then insert/replace keybinds to run `exec "sway_bfocus..."` commands
+Then insert/replace keybinds to run `exec "sway-overfocus..."` commands
 in your sway configuration.
 
 See the [usage](usage.md) page for details on constructing focus commands.
 The following config section is a good starting point,
 but commands can be configured granularly to suit your needs.
 
-    bindsym $mod+h exec 'sway_bfocus split-lt float-lt output-ls'
-    bindsym $mod+j exec 'sway_bfocus split-dt float-dt output-ds'
-    bindsym $mod+k exec 'sway_bfocus split-ut float-ut output-us'
-    bindsym $mod+l exec 'sway_bfocus split-rt float-rt output-rs'
-    bindsym $mod+Tab exec 'sway_bfocus group-rw group-dw'
-    bindsym $mod+Shift+Tab exec 'sway_bfocus group-lw group-uw'
+    bindsym $mod+h exec 'sway-overfocus split-lt float-lt output-ls'
+    bindsym $mod+j exec 'sway-overfocus split-dt float-dt output-ds'
+    bindsym $mod+k exec 'sway-overfocus split-ut float-ut output-us'
+    bindsym $mod+l exec 'sway-overfocus split-rt float-rt output-rs'
+    bindsym $mod+Tab exec 'sway-overfocus group-rw group-dw'
+    bindsym $mod+Shift+Tab exec 'sway-overfocus group-lw group-uw'

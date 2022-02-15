@@ -1,6 +1,6 @@
 Syntax:
 
-    sway_bfocus [--i3] <targets>
+    sway-overfocus [--i3] <targets>
 
 Targets:
 
@@ -28,14 +28,14 @@ Edge action:
     i - spill over and focus the inactive focus of container adjacent to parent
     t - spill over and traverse (focus the container closest to the current)
 
-sway_bfocus runs a focus command that only considers the specified targets
+sway-overfocus runs a focus command that only considers the specified targets
 while ignoring all other containers. Each target consists of a layout type,
 a direction, and an edge case behavior.
 
 Example:
 
-    sway_bfocus split-lt float-lt output-ls
-    sway_bfocus --i3 split-lt float-lt output-ls
+    sway-overfocus split-lt float-lt output-ls
+    sway-overfocus --i3 split-lt float-lt output-ls
 
 This command will move left, though only between splits, floats, and outputs.
 Tabs will be skipped, and a visible container physically left of the current one

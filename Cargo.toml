@@ -1,5 +1,5 @@
 [package]
-name = "sway_bfocus"
+name = "sway-overfocus"
 version = "0.1.0"
 edition = "2021"
 
