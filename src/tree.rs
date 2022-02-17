@@ -139,21 +139,26 @@ impl Tree {
         }
     }
 
-    /// Reform the tree to prepare for traversal.
-    /// 1. Top node is marked as `Root`.
-    /// 2. Workspace floats are moved to "regular" nodes in a separate subtree.
-    /// 3. Fullscreen children replace their entire workspace
-    ///    (global fullscreen replaces the entire tree).
+    /// Reform the tree to prepare for neighbor searching
     pub fn reform(mut self) -> Tree {
         self.layout = Layout::Root;
+        // Remove scratchpad and potential similar output nodes
+        self.nodes
+            .retain(|node| node.name.as_ref().map(|name| name.starts_with("__i3")) != Some(true));
+
         for output in self.nodes.iter_mut() {
+            // Remove dockarea nodes
+            output
+                .nodes
+                .retain(|node: &Tree| node.con_type != ContainerType::Dockarea);
+            // Reform workspaces
             for workspace in output.nodes.iter_mut() {
                 // Split regular nodes and floating nodes into two subtrees with a new parent.
                 let focus = mem::take(&mut workspace.focus);
                 let nodes = mem::take(&mut workspace.nodes);
                 let floats = mem::take(&mut workspace.floating_nodes);
 
-                // Delegate focus history out to subtrees for regular nodes and floats.
+                // Delegate focus history out to subtrees for regular nodes and floats
                 let (focus_nodes, focus_floats): (Vec<u64>, Vec<u64>) = focus
                     .iter()
                     .partition(|id| nodes.iter().any(|n| n.id == **id));
@@ -165,7 +170,7 @@ impl Tree {
                 workspace.focus =
                     Box::new(if focus.first() == focus_nodes.first() { [0, 1] } else { [1, 0] });
 
-                // Subtrees inherit most properties from the original.
+                // Subtrees inherit most properties from the original
                 let mut nodes_node = workspace.clone();
                 nodes_node.id = 0;
                 nodes_node.nodes = nodes;
@@ -182,9 +187,9 @@ impl Tree {
                 workspace.nodes = vec![nodes_node, floats_node];
                 workspace.layout = Layout::Other;
 
-                // For any workspace with a fullscreen child, replace it with said child.
+                // For any workspace with a fullscreen child, replace it with said child
                 if let Some(mut fullscreen_node) = workspace.extract_fullscreen_child() {
-                    // If the node is global fullscreen, it replaces the entire tree.
+                    // If the node is global fullscreen, it replaces the entire tree
                     if fullscreen_node.fullscreen_mode == 2 {
                         return fullscreen_node;
                     }
