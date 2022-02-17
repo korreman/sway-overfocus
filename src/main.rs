@@ -10,7 +10,7 @@ use tree::Tree;
 enum FocusError {
     Args,
     Retrieve,
-    Parse,
+    Parse(serde_json::Error),
     Command,
     Message,
 }
@@ -21,7 +21,7 @@ fn main() {
             match e {
                 FocusError::Args => eprint!("{}", include_str!("../usage.md")),
                 FocusError::Retrieve => eprintln!("error: failed to acquire container tree"),
-                FocusError::Parse => eprintln!("error: failed to parse container tree"),
+                FocusError::Parse(e) => eprintln!("error: failed to parse container tree\n{e}"),
                 FocusError::Command => eprintln!("error: no valid focus command"),
                 FocusError::Message => eprintln!("error: failed to message WM"),
             };
@@ -42,9 +42,7 @@ fn task() -> Result<(), FocusError> {
     let input = get_tree.output().ok().ok_or(FocusError::Retrieve)?;
 
     // Parsing
-    let tree: Tree = serde_json::from_slice(input.stdout.as_slice())
-        .ok()
-        .ok_or(FocusError::Parse)?;
+    let tree: Tree = serde_json::from_slice(input.stdout.as_slice()).map_err(FocusError::Parse)?;
 
     // Pre-process
     let tree = tree.reform();

@@ -1,5 +1,5 @@
 //! Neighbor-finding algorithm.
-use super::tree::{Layout, Rect, Tree, Vec2};
+use super::tree::{Layout, Rect, Tree, Vec2, ID};
 
 /// A target with which to search for a neighbor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -136,7 +136,7 @@ fn neighbor_local<'a>(tree: &'a Tree, target: &Target) -> Option<&'a Tree> {
                 _ => unreachable!(),
             };
             // IDs are included to resolve ties
-            let id_order = if flip { t.id } else { u32::MAX - t.id };
+            let id_order = if flip { t.id } else { ID::MAX - t.id };
             (pos_dist, id_order)
         };
 
@@ -155,7 +155,7 @@ fn neighbor_local<'a>(tree: &'a Tree, target: &Target) -> Option<&'a Tree> {
                 .max_by_key(|n| dist_key(n, !target.backward));
             res = res.or(wrap_target);
         }
-        let ids = tree.nodes.iter().map(|n| n.id).collect::<Vec<u32>>();
+        let ids = tree.nodes.iter().map(|n| n.id).collect::<Vec<ID>>();
         println!(
             "Current: {}, New: {:?}, All: {:?}",
             focus_id,
@@ -200,7 +200,7 @@ fn select_leaf<'a>(mut t: &'a Tree, targets: &[Target]) -> &'a Tree {
                         } else {
                             n.rect.pos.x + n.rect.dim.x / 2
                         };
-                        (center, u32::MAX - n.id)
+                        (center, ID::MAX - n.id)
                     };
                     if target.backward {
                         t.nodes.iter().max_by_key(key)

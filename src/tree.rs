@@ -106,10 +106,12 @@ pub struct Vec2 {
     pub y: i32,
 }
 
+pub type ID = u64;
+
 /// Container tree, representing output from `-t get_tree`.
 #[derive(Debug, Deserialize, Clone)]
 pub struct Tree {
-    pub id: u32,
+    pub id: ID,
     pub name: Option<String>,
     /// Needed for generating appropiate focus commands.
     #[serde(rename = "type")]
@@ -117,7 +119,7 @@ pub struct Tree {
     pub layout: Layout,
     pub rect: Rect,
     pub focused: bool,
-    pub focus: Box<[u32]>,
+    pub focus: Box<[u64]>,
     pub nodes: Vec<Tree>,
     /// Only workspaces should contain these, before preprocessing.
     pub floating_nodes: Box<[Tree]>,
@@ -152,7 +154,7 @@ impl Tree {
                 let floats = mem::take(&mut workspace.floating_nodes);
 
                 // Delegate focus history out to subtrees for regular nodes and floats.
-                let (focus_nodes, focus_floats): (Vec<u32>, Vec<u32>) = focus
+                let (focus_nodes, focus_floats): (Vec<u64>, Vec<u64>) = focus
                     .iter()
                     .partition(|id| nodes.iter().any(|n| n.id == **id));
 
