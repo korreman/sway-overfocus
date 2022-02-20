@@ -32,6 +32,8 @@ fn main() {
 }
 
 fn task() -> Result<(), FocusError> {
+    env_logger::init();
+
     // Parse arguments into config and targets
     let args: Box<[String]> = env::args().collect();
     let (i3, targets) = parse_args(&args).ok_or(FocusError::Args)?;
