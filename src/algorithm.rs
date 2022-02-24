@@ -46,11 +46,7 @@ pub fn neighbor<'a>(mut t: &'a Tree, targets: &[Target]) -> Option<&'a Tree> {
         debug!("Node {}, {:?}", t.id, t.name);
         if let Some(target) = match_targets(t, targets) {
             trace!("Matched {target:?}");
-            if t.nodes.len() > 1 {
-                matching_parents.push((target, t));
-            } else {
-                trace!("Singleton target parent, ignoring");
-            }
+            matching_parents.push((target, t));
         }
         if let Some(new_t) = t.focus_local() {
             t = new_t;
@@ -59,7 +55,7 @@ pub fn neighbor<'a>(mut t: &'a Tree, targets: &[Target]) -> Option<&'a Tree> {
             break;
         }
     }
-    debug!("Going through parents lowest first");
+    debug!("Searching ancestors for neighbor");
     // Search backwards through the stack of parents for a valid neighbor.
     // Returns an `Option<Option<_>>`,
     // `Some(None)` is used to stop early when matching a target with `EdgeMode::Stop`.
@@ -106,8 +102,8 @@ fn neighbor_local<'a>(tree: &'a Tree, target: &Target) -> Option<&'a Tree> {
 
     if target.kind == Kind::Float || target.kind == Kind::Output {
         let focus_id = *tree.focus.first()?;
-        let focused = tree.nodes[focus_idx].rect;
-        trace!("Focused {focused:?}");
+        let focused = &tree.nodes[focus_idx];
+        trace!("Focused {:?}", focused.rect);
 
         // Floats and outputs are chosen based on dimensions and position.
         // Both are first filtered by a criteria,
@@ -121,7 +117,7 @@ fn neighbor_local<'a>(tree: &'a Tree, target: &Target) -> Option<&'a Tree> {
         // Filtering predicate
         let pred = |t: &Tree, flip: bool| {
             trace!("Testing node {}, {:?}", t.id, t.rect);
-            let (a, b) = if flip { (t.rect, focused) } else { (focused, t.rect) };
+            let (a, b) = if flip { (t.rect, focused.rect) } else { (focused.rect, t.rect) };
             let p = t.id != focus_id // Discard currently focused node
                 && match target.kind {
                     // For floats, the middle must be past the focused middle on the chosen axis
@@ -143,12 +139,12 @@ fn neighbor_local<'a>(tree: &'a Tree, target: &Target) -> Option<&'a Tree> {
             trace!("Measuring node {}, {:?}", t.id, t.rect);
             let pos_dist = match target.kind {
                 // Floats are chosen by component-wise distance
-                Kind::Float => (middle(t.rect) - middle(focused)).saturating_abs(),
+                Kind::Float => (middle(t.rect) - middle(focused.rect)).saturating_abs(),
                 // Outputs are chosen by euclidean distance from focused center to closest point
                 Kind::Output => {
                     let center = Vec2 {
-                        x: focused.pos.x + focused.dim.x / 2,
-                        y: focused.pos.y + focused.dim.y / 2,
+                        x: focused.rect.pos.x + focused.rect.dim.x / 2,
+                        y: focused.rect.pos.y + focused.rect.dim.y / 2,
                     };
                     let p = t.rect.closest_point(center);
                     (center.x - p.x) * (center.x - p.x) + (center.y - p.y) * (center.y - p.y)
@@ -169,12 +165,13 @@ fn neighbor_local<'a>(tree: &'a Tree, target: &Target) -> Option<&'a Tree> {
             .min_by_key(|n| dist_key(n, target.backward));
         // If wrapping, filter by flipped (not negated) predicate and select furthest node
         if target.edge_mode == EdgeMode::Wrap {
+            trace!("Finding potential wraparound target");
             let wrap_target = tree
                 .nodes
                 .iter()
                 .filter(|n| pred(n, !target.backward))
                 .max_by_key(|n| dist_key(n, !target.backward));
-            res = res.or(wrap_target);
+            res = res.or(wrap_target).or(Some(focused));
         }
         res
     } else {
