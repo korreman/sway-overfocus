@@ -1,19 +1,16 @@
 use log::info;
 use std::env;
-use std::process::Command;
+use swayipc::Connection;
 
 mod algorithm;
 use algorithm::{EdgeMode, Kind, Target};
 mod tree;
-use tree::Tree;
 
 #[derive(Debug)]
 enum FocusError {
     Args,
-    Retrieve,
-    Parse(serde_json::Error),
     Command,
-    Message,
+    SwayIPC(swayipc::Error),
 }
 
 fn main() {
@@ -21,10 +18,8 @@ fn main() {
         Err(e) => {
             match e {
                 FocusError::Args => eprint!("{}", include_str!("../usage.md")),
-                FocusError::Retrieve => eprintln!("error: failed to acquire container tree"),
-                FocusError::Parse(e) => eprintln!("error: failed to parse container tree\n{e}"),
                 FocusError::Command => eprintln!("error: no valid focus command"),
-                FocusError::Message => eprintln!("error: failed to message WM"),
+                FocusError::SwayIPC(e) => eprintln!("swayipc error: {e}"),
             };
             std::process::exit(1);
         }
@@ -37,50 +32,36 @@ fn task() -> Result<(), FocusError> {
 
     info!("Parsing arguments");
     let args: Box<[String]> = env::args().collect();
-    let (i3, targets) = parse_args(&args).ok_or(FocusError::Args)?;
+    let targets = parse_args(&args).ok_or(FocusError::Args)?;
+
+    info!("Starting connection");
+    let mut c = Connection::new().map_err(FocusError::SwayIPC)?;
 
     info!("Retrieving tree");
-    let mut get_tree = Command::new("swaymsg");
-    get_tree.arg("-t").arg("get_tree");
-    let input = get_tree.output().ok().ok_or(FocusError::Retrieve)?;
-
-    info!("Parsing tree");
-    let tree: Tree = serde_json::from_slice(input.stdout.as_slice()).map_err(FocusError::Parse)?;
+    let tree = c.get_tree().map_err(FocusError::SwayIPC)?;
 
     info!("Pre-processing tree");
-    let tree = tree.preprocess();
+    let tree = tree::preprocess(tree);
 
     info!("Searching for neighbor");
     let neighbor = algorithm::neighbor(&tree, &targets);
 
     if let Some(neighbor) = neighbor {
-        let focus_cmd = neighbor.focus_command().ok_or(FocusError::Command)?;
-        info!("Focus command: '{focus_cmd}'");
-        let mut cmd = Command::new(if i3 { "i3-msg" } else { "swaymsg" });
-        cmd.arg(focus_cmd);
-        cmd.spawn()
-            .and_then(|mut p| p.wait())
-            .ok()
-            .ok_or(FocusError::Message)?;
+        let focus_cmd = tree::focus_command(neighbor).ok_or(FocusError::Command)?;
+        info!("Running focus command: '{focus_cmd}'");
+        c.run_command(focus_cmd).unwrap();
     } else {
         info!("No neighbor found");
     }
     Ok(())
 }
 
-fn parse_args(args: &[String]) -> Option<(bool, Box<[Target]>)> {
-    // Check argument count and `--i3` flag
-    let (i3, args) = if args.len() > 2 && args[1] == "--i3" {
-        (true, &args[2..])
-    } else if args.len() > 1 {
-        (false, &args[1..])
-    } else {
+fn parse_args(args: &[String]) -> Option<Box<[Target]>> {
+    if args.len() < 2 {
         return None;
-    };
+    }
 
-    // All subsequent arguments are layout targets,
-    // so we can map parsing to the remaining slice.
-    let targets: Option<Box<[Target]>> = args
+    args[1..]
         .iter()
         .map(|arg| {
             let (target_name, mode_chars) = arg.split_once('-')?;
@@ -114,7 +95,5 @@ fn parse_args(args: &[String]) -> Option<(bool, Box<[Target]>)> {
                 edge_mode,
             })
         })
-        .collect();
-
-    Some((i3, targets?))
+        .collect()
 }

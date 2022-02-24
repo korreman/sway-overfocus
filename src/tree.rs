@@ -1,278 +1,129 @@
 //! Tree types, parsing, and pre-processing.
 use log::{debug, trace};
-use serde::Deserialize;
 use std::mem;
+use swayipc::{Node, NodeLayout, NodeType, Rect};
 
-/// Parsed layout, immediately converted to [Layout].
-#[derive(Deserialize)]
-#[serde(rename_all = "lowercase")]
-enum PLayout {
-    SplitH,
-    SplitV,
-    Stacked,
-    Tabbed,
-    Output,
-    #[serde(other)]
-    Other,
-}
-
-/// Re-interpreted layout.
-#[derive(Debug, Clone, Copy, Deserialize)]
-#[serde(from = "PLayout")]
-pub enum Layout {
-    /// Holds outputs.
-    Root,
-    /// Holds workspaces.
-    Output,
-    /// Holds floating containers as regular nodes.
-    Floats,
-    /// `hsplith` and `vsplit` container.
-    Split {
-        vertical: bool,
-    },
-    /// Horizontal groups are tabbed, vertical groups are stacking.
-    Group {
-        vertical: bool,
-    },
-    Other,
-}
-
-impl From<PLayout> for Layout {
-    fn from(l: PLayout) -> Self {
-        match l {
-            PLayout::SplitH => Layout::Split { vertical: false },
-            PLayout::SplitV => Layout::Split { vertical: true },
-            PLayout::Tabbed => Layout::Group { vertical: false },
-            PLayout::Stacked => Layout::Group { vertical: true },
-            PLayout::Output => Layout::Output,
-            PLayout::Other => Layout::Other,
-        }
+/// Closest point to `p` within the rectangle.
+pub fn closest_point(rect: &Rect, p: &Vec2) -> Vec2 {
+    Vec2 {
+        x: i32::clamp(p.x, rect.x, rect.x + rect.width - 1),
+        y: i32::clamp(p.y, rect.y, rect.y + rect.height - 1),
     }
 }
 
-#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum ContainerType {
-    Root,
-    Output,
-    Con,
-    FloatingCon,
-    Workspace,
-    Dockarea,
-}
-
-/// Parsed rectangles, immediately converted to [Rect].
-#[derive(Deserialize)]
-struct PRect {
-    x: i32,
-    y: i32,
-    width: i32,
-    height: i32,
-}
-
-/// Bounding boxes of containers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(from = "PRect")]
-pub struct Rect {
-    pub pos: Vec2,
-    pub dim: Vec2,
-}
-
-impl From<PRect> for Rect {
-    /// Conversion only changes the data layout.
-    fn from(r: PRect) -> Rect {
-        Rect {
-            pos: Vec2 { x: r.x, y: r.y },
-            dim: Vec2 {
-                x: r.width,
-                y: r.height,
-            },
-        }
-    }
-}
-
-impl Rect {
-    /// Closest point to `p` within the rectangle.
-    pub fn closest_point(&self, p: Vec2) -> Vec2 {
-        Vec2 {
-            x: i32::clamp(p.x, self.pos.x, self.pos.x + self.dim.x - 1),
-            y: i32::clamp(p.y, self.pos.y, self.pos.y + self.dim.y - 1),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Vec2 {
     pub x: i32,
     pub y: i32,
 }
 
-pub type ID = u64;
-
-/// Container tree, representing output from `-t get_tree`.
-#[derive(Debug, Deserialize, Clone)]
-pub struct Tree {
-    pub id: ID,
-    pub name: Option<String>,
-    /// Needed for generating appropiate focus commands.
-    #[serde(rename = "type")]
-    pub con_type: ContainerType,
-    pub layout: Layout,
-    pub rect: Rect,
-    pub focused: bool,
-    pub focus: Box<[u64]>,
-    pub nodes: Vec<Tree>,
-    /// Only workspaces should contain these, before preprocessing.
-    pub floating_nodes: Box<[Tree]>,
-    pub fullscreen_mode: u8,
+/// Generate a command that will focus the top node.
+pub fn focus_command(node: &Node) -> Option<String> {
+    let name = node.name.clone()?;
+    let id = node.id;
+    match node.node_type {
+        NodeType::Root => None,
+        NodeType::Output => Some(format!("focus output {name}")),
+        NodeType::Workspace => Some(format!("workspace {name}")),
+        _ => Some(format!("[con_id={id}] focus")),
+    }
 }
 
-impl Tree {
-    /// Generate a command that will focus the top node.
-    pub fn focus_command(&self) -> Option<String> {
-        let name = self.name.clone()?;
-        let id = self.id;
-        match self.con_type {
-            ContainerType::Root => None,
-            ContainerType::Output => Some(format!("focus output {name}")),
-            ContainerType::Workspace => Some(format!("workspace {name}")),
-            _ => Some(format!("[con_id={id}] focus")),
+/// Reform the tree to prepare for neighbor searching
+pub fn preprocess(mut node: Node) -> Node {
+    node.layout = NodeLayout::None;
+    // Remove scratchpad and potential similar output nodes
+    node.nodes
+        .retain(|node| node.name.as_ref().map(|name| name.starts_with("__i3")) != Some(true));
+
+    for output in node.nodes.iter_mut() {
+        debug!(
+            "Output '{}', ID {}",
+            output.name.as_ref().unwrap_or(&"".to_string()),
+            output.id,
+        );
+
+        // On i3, outputs contain a `content` subnode containing workspaces.
+        // If this is the case, replace the children of the output those of the content node.
+        if let Some(content) = output
+            .nodes
+            .iter_mut()
+            .find(|node| node.name.as_ref() == Some(&"content".to_string()))
+        {
+            trace!("Found 'content' subnode, collapsing");
+            output.focus = mem::take(&mut content.focus);
+            output.nodes = mem::take(&mut content.nodes);
         }
-    }
 
-    /// Reform the tree to prepare for neighbor searching
-    pub fn preprocess(mut self) -> Tree {
-        self.layout = Layout::Root;
-        // Remove scratchpad and potential similar output nodes
-        self.nodes
-            .retain(|node| node.name.as_ref().map(|name| name.starts_with("__i3")) != Some(true));
-
-        for output in self.nodes.iter_mut() {
+        // Reform workspaces
+        for workspace in output.nodes.iter_mut() {
             debug!(
-                "Output '{}', ID {}",
-                output.name.as_ref().unwrap_or(&"".to_string()),
-                output.id,
+                "Workspace '{}', ID {}",
+                workspace.name.as_ref().unwrap_or(&"".to_string()),
+                workspace.id,
             );
-
-            // On i3, outputs contain a `content` subnode containing workspaces.
-            // If this is the case, replace the children of the output those of the content node.
-            if let Some(content) = output
-                .nodes
-                .iter_mut()
-                .find(|node| node.name.as_ref() == Some(&"content".to_string()))
-            {
-                trace!("Found 'content' subnode, collapsing");
-                output.focus = mem::take(&mut content.focus);
-                output.nodes = mem::take(&mut content.nodes);
-            }
-
-            // Reform workspaces
-            for workspace in output.nodes.iter_mut() {
-                debug!(
-                    "Workspace '{}', ID {}",
-                    workspace.name.as_ref().unwrap_or(&"".to_string()),
-                    workspace.id,
-                );
-                // Split regular nodes and floating nodes into two subtrees with a new parent.
-                let focus = mem::take(&mut workspace.focus);
-                let nodes = mem::take(&mut workspace.nodes);
-                let floats = mem::take(&mut workspace.floating_nodes);
-                trace!("{} nodes, {} floats", nodes.len(), floats.len());
-
-                // Delegate focus history out to subtrees for regular nodes and floats
-                let (focus_nodes, focus_floats): (Vec<u64>, Vec<u64>) = focus
-                    .iter()
-                    .partition(|id| nodes.iter().any(|n| n.id == **id));
-                trace!("Original focus: {focus:?}, node: {focus_nodes:?}, float: {focus_floats:?}");
-
-                // Set focus of parent based on which new subtree contains latest focused child.
-                // Subtrees are given IDs 0 and 1.
-                // This is fine as the parent is assigned the layout `Other`,
-                // and the subtrees can therefore never be selected as focus targets.
-                workspace.focus = Box::new(if focus.first() == focus_nodes.first() {
-                    trace!("Regular node subtree is focused");
-                    [0, 1]
-                } else {
-                    trace!("Float subtree is focused");
-                    [1, 0]
-                });
-
-                // Subtrees inherit most properties from the original
-                let mut nodes_node = workspace.clone();
-                nodes_node.id = 0;
-                nodes_node.nodes = nodes;
-                nodes_node.focus = focus_nodes.into_boxed_slice();
-                nodes_node.fullscreen_mode = 0;
-
-                let mut floats_node = workspace.clone();
-                floats_node.id = 1;
-                floats_node.nodes = floats.to_vec();
-                floats_node.focus = focus_floats.into_boxed_slice();
-                floats_node.layout = Layout::Floats;
-                floats_node.fullscreen_mode = 0;
-
-                workspace.nodes = vec![nodes_node, floats_node];
-                workspace.layout = Layout::Other;
-
-                // For any workspace with a fullscreen child, replace it with said child
-                if let Some(mut fullscreen_node) = workspace.extract_fullscreen_child() {
-                    // If the node is global fullscreen, it replaces the entire tree
-                    if fullscreen_node.fullscreen_mode == 2 {
-                        debug!(
-                            "Node {} is global fullscreen, replaces entire tree",
-                            fullscreen_node.id
-                        );
-                        return fullscreen_node;
-                    }
-                    // Preserve workspace ID, type, and name when replacing.
-                    // If the fullscreen node is a focus target,
-                    // it will be focused indirectly through the workspace name.
-                    trace!(
-                        "Node {} is fullscreen, replaces workspace",
+            // For any workspace with a fullscreen child, replace it with said child
+            if let Some(mut fullscreen_node) = extract_fullscreen_child(workspace) {
+                // If the node is global fullscreen, it replaces the entire tree
+                if fullscreen_node.fullscreen_mode == Some(2) {
+                    debug!(
+                        "Node {} is global fullscreen, replaces entire tree",
                         fullscreen_node.id
                     );
-                    fullscreen_node.id = workspace.id;
-                    fullscreen_node.con_type = ContainerType::Workspace;
-                    fullscreen_node.name = mem::take(&mut workspace.name);
-                    *workspace = fullscreen_node;
+                    return fullscreen_node;
                 }
+                // Preserve workspace ID, type, and name when replacing.
+                // If the fullscreen node is a focus target,
+                // it will be focused indirectly through the workspace name.
+                trace!(
+                    "Node {} is fullscreen, replaces workspace",
+                    fullscreen_node.id
+                );
+                fullscreen_node.id = workspace.id;
+                fullscreen_node.node_type = NodeType::Workspace;
+                fullscreen_node.name = mem::take(&mut workspace.name);
+                *workspace = fullscreen_node;
             }
         }
-        self
     }
+    node
+}
 
-    /// Search the tree for a child that is fullscreen.
-    /// If found, the child is detached and returned.
-    /// Neighbors of the child are detached and dropped as collateral.
-    pub fn extract_fullscreen_child(&mut self) -> Option<Tree> {
-        if self.nodes.iter().any(|node| node.fullscreen_mode != 0) {
-            let nodes = mem::take(&mut self.nodes);
-            let node: Tree = nodes
-                .into_iter()
-                .find(|node| node.fullscreen_mode != 0)
-                .unwrap();
-            Some(node)
+// TODO: Handle floats in functions below
+
+/// Search the tree for a child that is fullscreen.
+/// If found, the child is detached and returned.
+/// Neighbors of the child are detached and dropped as collateral.
+pub fn extract_fullscreen_child(node: &mut Node) -> Option<Node> {
+    if node
+        .nodes
+        .iter()
+        .any(|node| node.fullscreen_mode == Some(1) || node.fullscreen_mode == Some(2))
+    {
+        let nodes = mem::take(&mut node.nodes);
+        let node: Node = nodes
+            .into_iter()
+            .find(|node| node.fullscreen_mode == Some(1) || node.fullscreen_mode == Some(2))
+            .unwrap();
+        Some(node)
+    } else {
+        node.nodes.iter_mut().find_map(extract_fullscreen_child)
+    }
+}
+
+/// Compute the index (_not_ identifier) of the focused node in child array,
+/// if any.
+pub fn focus_idx(node: &Node) -> Option<usize> {
+    node.nodes.iter().enumerate().find_map(|(idx, n)| {
+        if n.id == *node.focus.first()? {
+            Some(idx)
         } else {
-            self.nodes
-                .iter_mut()
-                .find_map(|n| n.extract_fullscreen_child())
+            None
         }
-    }
+    })
+}
 
-    /// Compute the index (_not_ identifier) of the focused node in child array,
-    /// if any.
-    pub fn focus_idx(&self) -> Option<usize> {
-        self.nodes.iter().enumerate().find_map(|(idx, n)| {
-            if n.id == *self.focus.first()? {
-                Some(idx)
-            } else {
-                None
-            }
-        })
-    }
-
-    /// Return the focused child, if any.
-    pub fn focus_local(&self) -> Option<&Tree> {
-        self.nodes.get(self.focus_idx()?)
-    }
+/// Return the focused child, if any.
+pub fn focus_local(node: &Node) -> Option<&Node> {
+    node.nodes.get(focus_idx(node)?)
 }
