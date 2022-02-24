@@ -49,7 +49,7 @@ fn task() -> Result<(), FocusError> {
     if let Some(neighbor) = neighbor {
         let focus_cmd = tree::focus_command(neighbor).ok_or(FocusError::Command)?;
         info!("Running focus command: '{focus_cmd}'");
-        c.run_command(focus_cmd).unwrap();
+        c.run_command(focus_cmd).map_err(FocusError::SwayIPC)?;
     } else {
         info!("No neighbor found");
     }
