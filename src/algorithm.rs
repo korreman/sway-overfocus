@@ -1,5 +1,6 @@
 //! Neighbor-finding algorithm.
 use super::tree::{Layout, Rect, Tree, Vec2, ID};
+use log::{debug, trace};
 
 /// A target with which to search for a neighbor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,31 +40,44 @@ pub enum EdgeMode {
 /// Find a neighbor matching one of the `targets`.
 pub fn neighbor<'a>(mut t: &'a Tree, targets: &[Target]) -> Option<&'a Tree> {
     // Go down the focus path and collect matching parents.
+    debug!("Performing downward focus traversal");
     let mut matching_parents = Vec::new();
     while !t.focused {
+        debug!("Node {}, {:?}", t.id, t.name);
         if let Some(target) = match_targets(t, targets) {
+            trace!("Matched {target:?}");
             if t.nodes.len() > 1 {
                 matching_parents.push((target, t));
+            } else {
+                trace!("Singleton target parent, ignoring");
             }
         }
         if let Some(new_t) = t.focus_local() {
             t = new_t;
         } else {
+            trace!("No focused child, stopping");
             break;
         }
     }
+    debug!("Going through parents lowest first");
     // Search backwards through the stack of parents for a valid neighbor.
     // Returns an `Option<Option<_>>`,
-    // `Some(None)` is used to stop early if matching a target with `EdgeMode::Stop`.
+    // `Some(None)` is used to stop early when matching a target with `EdgeMode::Stop`.
     let neighbor = matching_parents.iter().rev().find_map(|(t, p)| {
+        debug!("Parent {}", p.id);
         let n = neighbor_local(p, t);
+        if let Some(n) = n {
+            debug!("Found neighbor: {}", n.id);
+        }
         if t.edge_mode == EdgeMode::Stop {
+            debug!("Target is stopping, forcing return");
             Some(n)
         } else {
             n.map(Some)
         }
-    });
-    Some(select_leaf(neighbor??, targets))
+    })??;
+    debug!("Selecting a leaf descendant of neighbor");
+    Some(select_leaf(neighbor, targets))
 }
 
 /// Finds a parent that contains direct children matching one of the `targets`.
@@ -88,14 +102,16 @@ fn match_targets(tree: &Tree, targets: &[Target]) -> Option<Target> {
 /// according to the given target.
 fn neighbor_local<'a>(tree: &'a Tree, target: &Target) -> Option<&'a Tree> {
     let focus_idx = tree.focus_idx()?;
+    trace!("Finding neighbor for {target:?}");
 
     if target.kind == Kind::Float || target.kind == Kind::Output {
         let focus_id = *tree.focus.first()?;
         let focused = tree.nodes[focus_idx].rect;
+        trace!("Focused {focused:?}");
 
         // Floats and outputs are chosen based on dimensions and position.
-        // Both filter by a criteria,
-        // then choose a container based on some distance measure.
+        // Both are first filtered by a criteria,
+        // then the minimum/maximum container is chosen based on some distance measure.
 
         // Selects either the `x` or `y` component based on verticality
         let component = |v: Vec2| if target.vertical { v.y } else { v.x };
@@ -104,8 +120,9 @@ fn neighbor_local<'a>(tree: &'a Tree, target: &Target) -> Option<&'a Tree> {
 
         // Filtering predicate
         let pred = |t: &Tree, flip: bool| {
+            trace!("Testing node {}, {:?}", t.id, t.rect);
             let (a, b) = if flip { (t.rect, focused) } else { (focused, t.rect) };
-            t.id != focus_id // Discard currently focused node
+            let p = t.id != focus_id // Discard currently focused node
                 && match target.kind {
                     // For floats, the middle must be past the focused middle on the chosen axis
                     Kind::Float => {
@@ -116,11 +133,14 @@ fn neighbor_local<'a>(tree: &'a Tree, target: &Target) -> Option<&'a Tree> {
                     // For outputs, their rects must be strictly past the focused rect
                     Kind::Output => component(a.pos) + component(a.dim) <= component(b.pos),
                     _ => unreachable!(),
-                }
+                };
+            trace!("Passes filter: {p}");
+            p
         };
 
         // Distance measure
         let dist_key = |t: &Tree, flip: bool| {
+            trace!("Measuring node {}, {:?}", t.id, t.rect);
             let pos_dist = match target.kind {
                 // Floats are chosen by component-wise distance
                 Kind::Float => (middle(t.rect) - middle(focused)).saturating_abs(),
@@ -135,6 +155,7 @@ fn neighbor_local<'a>(tree: &'a Tree, target: &Target) -> Option<&'a Tree> {
                 }
                 _ => unreachable!(),
             };
+            trace!("Distance {pos_dist}");
             // IDs are included to resolve ties
             let id_order = if flip { t.id } else { ID::MAX - t.id };
             (pos_dist, id_order)
@@ -155,15 +176,13 @@ fn neighbor_local<'a>(tree: &'a Tree, target: &Target) -> Option<&'a Tree> {
                 .max_by_key(|n| dist_key(n, !target.backward));
             res = res.or(wrap_target);
         }
-        let ids = tree.nodes.iter().map(|n| n.id).collect::<Vec<ID>>();
-        println!(
-            "Current: {}, New: {:?}, All: {:?}",
-            focus_id,
-            res.map(|n| n.id),
-            ids
-        );
         res
     } else {
+        trace!("Selecting neighbor by index");
+        trace!(
+            "Focused subnode index: {focus_idx} out of {}",
+            tree.nodes.len() - 1
+        );
         // The remaining targets can be chosen by index, disregarding verticality
         let len = tree.nodes.len();
         // Add length to avoid underflow
@@ -178,6 +197,7 @@ fn neighbor_local<'a>(tree: &'a Tree, target: &Target) -> Option<&'a Tree> {
         } else {
             None
         };
+        trace!("Resulting index: {idx:?}");
         idx.map(|idx| &tree.nodes[idx])
     }
 }
@@ -185,6 +205,7 @@ fn neighbor_local<'a>(tree: &'a Tree, target: &Target) -> Option<&'a Tree> {
 /// Find a leaf in a (presumed) neighboring container, respecting target edge-modes
 fn select_leaf<'a>(mut t: &'a Tree, targets: &[Target]) -> &'a Tree {
     loop {
+        debug!("Node {}, {:?}", t.id, t.name);
         // Match the current node with targets
         let target = match_targets(t, targets);
         let new_t = match target {
@@ -192,8 +213,10 @@ fn select_leaf<'a>(mut t: &'a Tree, targets: &[Target]) -> &'a Tree {
             // choose the closest neighbor to focused node.
             // Fx. if moving right, the leftmost child is selected.
             Some(target) if target.edge_mode == EdgeMode::Traverse => {
+                trace!("Matched traversing {:?}", target.kind);
                 // For floats, this entails finding the left/right/top/bottom-most node
                 if target.kind == Kind::Float {
+                    trace!("Float container, selecting left/right/top/bottom-most child");
                     let key = |n: &&Tree| {
                         let center = if target.vertical {
                             n.rect.pos.y + n.rect.dim.y / 2
@@ -224,5 +247,6 @@ fn select_leaf<'a>(mut t: &'a Tree, targets: &[Target]) -> &'a Tree {
             break;
         }
     }
+    debug!("Selected leaf {}", t.id);
     t
 }

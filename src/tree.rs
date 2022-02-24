@@ -141,8 +141,7 @@ impl Tree {
     }
 
     /// Reform the tree to prepare for neighbor searching
-    pub fn reform(mut self) -> Tree {
-        debug!("Reforming tree");
+    pub fn preprocess(mut self) -> Tree {
         self.layout = Layout::Root;
         // Remove scratchpad and potential similar output nodes
         self.nodes
@@ -162,7 +161,7 @@ impl Tree {
                 .iter_mut()
                 .find(|node| node.name.as_ref() == Some(&"content".to_string()))
             {
-                debug!("Found 'content' subnode, collapsing");
+                trace!("Found 'content' subnode, collapsing");
                 output.focus = mem::take(&mut content.focus);
                 output.nodes = mem::take(&mut content.nodes);
             }
@@ -178,23 +177,23 @@ impl Tree {
                 let focus = mem::take(&mut workspace.focus);
                 let nodes = mem::take(&mut workspace.nodes);
                 let floats = mem::take(&mut workspace.floating_nodes);
-                debug!("{} nodes, {} floats", nodes.len(), floats.len());
+                trace!("{} nodes, {} floats", nodes.len(), floats.len());
 
                 // Delegate focus history out to subtrees for regular nodes and floats
                 let (focus_nodes, focus_floats): (Vec<u64>, Vec<u64>) = focus
                     .iter()
                     .partition(|id| nodes.iter().any(|n| n.id == **id));
-                debug!("Original focus: {focus:?}, node: {focus_nodes:?}, float: {focus_floats:?}");
+                trace!("Original focus: {focus:?}, node: {focus_nodes:?}, float: {focus_floats:?}");
 
                 // Set focus of parent based on which new subtree contains latest focused child.
                 // Subtrees are given IDs 0 and 1.
                 // This is fine as the parent is assigned the layout `Other`,
                 // and the subtrees can therefore never be selected as focus targets.
                 workspace.focus = Box::new(if focus.first() == focus_nodes.first() {
-                    debug!("Node subtree is focused");
+                    trace!("Regular node subtree is focused");
                     [0, 1]
                 } else {
-                    debug!("Float subtree is focused");
+                    trace!("Float subtree is focused");
                     [1, 0]
                 });
 
@@ -220,7 +219,7 @@ impl Tree {
                     // If the node is global fullscreen, it replaces the entire tree
                     if fullscreen_node.fullscreen_mode == 2 {
                         debug!(
-                            "Node {} is global fullscreen, replaces tree",
+                            "Node {} is global fullscreen, replaces entire tree",
                             fullscreen_node.id
                         );
                         return fullscreen_node;
@@ -228,7 +227,7 @@ impl Tree {
                     // Preserve workspace ID, type, and name when replacing.
                     // If the fullscreen node is a focus target,
                     // it will be focused indirectly through the workspace name.
-                    debug!(
+                    trace!(
                         "Node {} is fullscreen, replaces workspace",
                         fullscreen_node.id
                     );

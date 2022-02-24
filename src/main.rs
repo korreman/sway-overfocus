@@ -1,3 +1,4 @@
+use log::info;
 use std::env;
 use std::process::Command;
 
@@ -34,33 +35,35 @@ fn main() {
 fn task() -> Result<(), FocusError> {
     env_logger::init();
 
-    // Parse arguments into config and targets
+    info!("Parsing arguments");
     let args: Box<[String]> = env::args().collect();
     let (i3, targets) = parse_args(&args).ok_or(FocusError::Args)?;
 
-    // Retrieve tree
+    info!("Retrieving tree");
     let mut get_tree = Command::new("swaymsg");
     get_tree.arg("-t").arg("get_tree");
     let input = get_tree.output().ok().ok_or(FocusError::Retrieve)?;
 
-    // Parsing
+    info!("Parsing tree");
     let tree: Tree = serde_json::from_slice(input.stdout.as_slice()).map_err(FocusError::Parse)?;
 
-    // Pre-process
-    let tree = tree.reform();
+    info!("Pre-processing tree");
+    let tree = tree.preprocess();
 
-    // Look for neighbor using targets
-    if let Some(neighbor) = algorithm::neighbor(&tree, &targets) {
-        // Run focus command for found neighbor
-        let mut cmd = Command::new(if i3 { "i3-msg" } else { "swaymsg" });
+    info!("Searching for neighbor");
+    let neighbor = algorithm::neighbor(&tree, &targets);
+
+    if let Some(neighbor) = neighbor {
         let focus_cmd = neighbor.focus_command().ok_or(FocusError::Command)?;
+        info!("Focus command: '{focus_cmd}'");
+        let mut cmd = Command::new(if i3 { "i3-msg" } else { "swaymsg" });
         cmd.arg(focus_cmd);
         cmd.spawn()
             .and_then(|mut p| p.wait())
             .ok()
             .ok_or(FocusError::Message)?;
     } else {
-        println!("no neighbor to focus");
+        info!("No neighbor found");
     }
     Ok(())
 }
@@ -77,38 +80,41 @@ fn parse_args(args: &[String]) -> Option<(bool, Box<[Target]>)> {
 
     // All subsequent arguments are layout targets,
     // so we can map parsing to the remaining slice.
-    let targets: Option<Box<[Target]>> = args.iter().map(|arg| {
-        let (target_name, mode_chars) = arg.split_once('-')?;
-        let kind = match target_name {
-            "split" => Some(Kind::Split),
-            "group" => Some(Kind::Group),
-            "float" => Some(Kind::Float),
-            "workspace" => Some(Kind::Workspace),
-            "output" => Some(Kind::Output),
-            _ => None,
-        }?;
-        let mut mode_chars = mode_chars.chars();
-        let (backward, vertical) = match mode_chars.next()? {
-            'r' => Some((false, false)),
-            'l' => Some((true, false)),
-            'd' => Some((false, true)),
-            'u' => Some((true, true)),
-            _ => None,
-        }?;
-        let edge_mode = match mode_chars.next()? {
-            's' => Some(EdgeMode::Stop),
-            'w' => Some(EdgeMode::Wrap),
-            't' => Some(EdgeMode::Traverse),
-            'i' => Some(EdgeMode::Inactive),
-            _ => None,
-        }?;
-        Some(Target {
-            kind,
-            backward,
-            vertical,
-            edge_mode,
+    let targets: Option<Box<[Target]>> = args
+        .iter()
+        .map(|arg| {
+            let (target_name, mode_chars) = arg.split_once('-')?;
+            let kind = match target_name {
+                "split" => Some(Kind::Split),
+                "group" => Some(Kind::Group),
+                "float" => Some(Kind::Float),
+                "workspace" => Some(Kind::Workspace),
+                "output" => Some(Kind::Output),
+                _ => None,
+            }?;
+            let mut mode_chars = mode_chars.chars();
+            let (backward, vertical) = match mode_chars.next()? {
+                'r' => Some((false, false)),
+                'l' => Some((true, false)),
+                'd' => Some((false, true)),
+                'u' => Some((true, true)),
+                _ => None,
+            }?;
+            let edge_mode = match mode_chars.next()? {
+                's' => Some(EdgeMode::Stop),
+                'w' => Some(EdgeMode::Wrap),
+                't' => Some(EdgeMode::Traverse),
+                'i' => Some(EdgeMode::Inactive),
+                _ => None,
+            }?;
+            Some(Target {
+                kind,
+                backward,
+                vertical,
+                edge_mode,
+            })
         })
-    }).collect();
+        .collect();
 
     Some((i3, targets?))
 }
