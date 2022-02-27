@@ -1,5 +1,4 @@
 use log::info;
-use std::env;
 use swayipc::Connection;
 
 mod algorithm;
@@ -29,23 +28,19 @@ fn main() {
 
 fn task() -> Result<(), FocusError> {
     env_logger::init();
-
     info!("Parsing arguments");
-    let args: Box<[String]> = env::args().collect();
+    let args: Box<[String]> = std::env::args().collect();
     let targets = parse_args(&args).ok_or(FocusError::Args)?;
 
     info!("Starting connection");
     let mut c = Connection::new().map_err(FocusError::SwayIPC)?;
-
     info!("Retrieving tree");
     let tree = c.get_tree().map_err(FocusError::SwayIPC)?;
-
     info!("Pre-processing tree");
     let tree = tree::preprocess(tree);
 
     info!("Searching for neighbor");
     let neighbor = algorithm::neighbor(&tree, &targets);
-
     if let Some(neighbor) = neighbor {
         let focus_cmd = tree::focus_command(neighbor).ok_or(FocusError::Command)?;
         info!("Running focus command: '{focus_cmd}'");

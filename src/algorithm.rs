@@ -3,16 +3,16 @@ use crate::tree::{closest_point, focus_idx, focus_local, Vec2};
 use log::{debug, trace};
 use swayipc::{Node, NodeLayout, NodeType, Rect};
 
-/// A target with which to search for a neighbor.
+/// A target description for neighbor searching.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Target {
     /// The kind of neighbor to find.
     pub kind: Kind,
     /// Whether to find the succeeding or preceding neighbor.
     pub backward: bool,
-    /// Whether to switch horizontally or vertically.
+    /// Whether to search horizontally or vertically.
     pub vertical: bool,
-    /// Moving-into-edge handling.
+    /// Moving-past-edge behavior.
     pub edge_mode: EdgeMode,
 }
 
@@ -32,19 +32,19 @@ pub enum EdgeMode {
     Stop,
     /// Wrap around and focus the first or last child.
     Wrap,
-    /// Spill over, focus the closest node in new parent.
+    /// Spill over, focus the closest descendant in new parent.
     Traverse,
-    /// Spill over, focus the inactive focus of the new parent.
+    /// Spill over, focus the inactive-focus child of the new parent.
     Inactive,
 }
 
 /// Find a neighbor matching one of the `targets`.
 pub fn neighbor<'a>(mut t: &'a Node, targets: &[Target]) -> Option<&'a Node> {
-    // Go down the focus path and collect matching parents.
+    // Generate the focus path as a list of ancestors
     debug!("Finding focus path");
     let mut path = Vec::new();
     while !t.focused {
-        debug!("Node {}, {:?}", t.id, t.name);
+        debug!("Node {}", t.id);
         path.push(t);
         if let Some(new_t) = focus_local(t) {
             t = new_t;
@@ -53,10 +53,7 @@ pub fn neighbor<'a>(mut t: &'a Node, targets: &[Target]) -> Option<&'a Node> {
             break;
         }
     }
-    debug!("Searching ancestors for neighbor");
-    // Search backwards through the stack of parents for a valid neighbor.
-    // Returns an `Option<Option<_>>`,
-    // `Some(None)` is used to stop early when matching a target with `EdgeMode::Stop`.
+    debug!("Searching focus path bottom-up for neighbor");
     let neighbor = path.iter().rev().find_map(|parent| {
         debug!("Parent {}", parent.id);
         let target = match_targets(parent, targets)?;
@@ -64,13 +61,12 @@ pub fn neighbor<'a>(mut t: &'a Node, targets: &[Target]) -> Option<&'a Node> {
         let n = neighbor_local(parent, &target);
         if target.edge_mode == EdgeMode::Stop {
             debug!("Target is stopping, forcing return");
-            Some(n)
+            Some(n) // `Some(None)` can stop the search without a result
         } else {
             n.map(Some)
         }
     })??;
-    debug!("Found neighbor: {}", neighbor.id);
-    debug!("Selecting a leaf descendant of neighbor");
+    debug!("Found neighbor {}, selecting descendant", neighbor.id);
     Some(select_leaf(neighbor, targets))
 }
 
@@ -79,6 +75,7 @@ fn match_targets(node: &Node, targets: &[Target]) -> Option<Target> {
     let focus = *node.focus.first()?;
     let float_focused = node.floating_nodes.iter().any(|c| c.id == focus);
     let res = *targets.iter().find(|target| match target.kind {
+        // Note that we match with a suitable _parent type_ for the target
         Kind::Output => node.node_type == NodeType::Root,
         Kind::Workspace => node.node_type == NodeType::Output,
         Kind::Split => {
@@ -96,17 +93,17 @@ fn match_targets(node: &Node, targets: &[Target]) -> Option<Target> {
     Some(res)
 }
 
-/// Tries to find a neighbor of the focused child of the top node in `tree`,
+/// Attempt to find a neighbor of the focused child `node`,
 /// according to the given target.
-fn neighbor_local<'a>(tree: &'a Node, target: &Target) -> Option<&'a Node> {
-    let (focus_idx, children) = focus_idx(tree)?;
+fn neighbor_local<'a>(node: &'a Node, target: &Target) -> Option<&'a Node> {
+    let (focus_idx, children) = focus_idx(node)?;
 
     if target.kind == Kind::Float || target.kind == Kind::Output {
-        let focus_id = *tree.focus.first()?;
+        let focus_id = *node.focus.first()?;
         let focused = &children[focus_idx];
         trace!("Focused {:?}", focused.rect);
 
-        // Selects x or y component of a rect, based on whether the target is horizontal/vertical
+        // Selects x or y component of a rect based on whether target is horizontal or vertical
         let component = |r: &Rect| if target.vertical { (r.y, r.height) } else { (r.x, r.width) };
 
         // Computes a distance to the focused node.
@@ -118,12 +115,11 @@ fn neighbor_local<'a>(tree: &'a Node, target: &Target) -> Option<&'a Node> {
             let ((a_pos, a_dim), (b_pos, b_dim)) = (component(a), component(b));
             let (a_mid, b_mid) = (a_pos + a_dim / 2, b_pos + b_dim / 2);
             let a_edge = a_pos + a_dim;
-            trace!("A component: ({a_pos}, {a_dim}), B component: ({b_pos}, {b_dim})");
-            trace!("A middle: {a_mid}, B middle: {b_mid}");
-            trace!("A edge: {a_edge}");
+            trace!("A-component: ({a_pos}, {a_dim}), B-component: ({b_pos}, {b_dim})");
+            trace!("A-edge: {a_edge}, A-middle: {a_mid}, B middle: {b_mid}");
 
             let dist = match target.kind {
-                // Floats are compared by distance of centers on one axis
+                // Floats are compared by distance of centers on relevant axis
                 Kind::Float if a_mid < b_mid || (a_mid == b_mid && flip == (t.id > focus_id)) => {
                     Some((b_mid - a_mid).saturating_abs())
                 }
@@ -155,8 +151,8 @@ fn neighbor_local<'a>(tree: &'a Node, target: &Target) -> Option<&'a Node> {
                 .filter_map(|n| Some((dist(n, !target.backward)?, n)))
                 .max_by_key(|(d, _)| *d)
                 .map(|(_, node)| node);
-            // Also includes focused container as a last resort.
-            // Because this allows traversing wraparound for multiple outputs.
+            // Also include focused container as a last resort.
+            // This allows nice interaction between [EdgeMode::Traverse] and [EdgeMode::Wrap].
             res = wrap_target.or(Some(focused));
         }
         res
@@ -164,15 +160,14 @@ fn neighbor_local<'a>(tree: &'a Node, target: &Target) -> Option<&'a Node> {
         trace!("Selecting neighbor by index");
         let len = children.len();
         trace!("Focused subnode index: {focus_idx} out of {}", len - 1);
-        // The remaining targets can be chosen by index, disregarding verticality
-        // Add length to avoid underflow
-        let idx = focus_idx + len;
+        // Other target kinds can be chosen by index, disregarding verticality
+        let idx = focus_idx + len; // Offset by length to avoid underflow
         let idx = if target.backward { idx - 1 } else { idx + 1 };
         let idx = if target.edge_mode == EdgeMode::Wrap {
             // If wrapping, calculate modulo the number of children
             Some(idx % len)
         } else if len <= idx && idx < len * 2 {
-            // Otherwise perform a range check and subtract length again
+            // Otherwise perform a range check and negate offset
             Some(idx - len)
         } else {
             None
@@ -185,16 +180,16 @@ fn neighbor_local<'a>(tree: &'a Node, target: &Target) -> Option<&'a Node> {
 /// Find a leaf in a (presumed) neighboring container, respecting target edge-modes
 fn select_leaf<'a>(mut t: &'a Node, targets: &[Target]) -> &'a Node {
     loop {
-        debug!("Node {}, {:?}", t.id, t.name);
+        debug!("Node {}", t.id);
         // Match the current node with targets
         let target = match_targets(t, targets);
         let new_t = match target {
-            // If the target has traversal mode,
+            // If the target has [EdgeMode::Traverse],
             // choose the closest neighbor to focused node.
-            // Fx. if moving right, the leftmost child is selected.
+            // Fx. if moving right, the left-most child is selected.
             Some(target) if target.edge_mode == EdgeMode::Traverse => {
                 trace!("Matched traversing {:?}", target.kind);
-                // For floats, this entails finding the left/right/top/bottom-most node
+                // For floats, this requires comparing geometry
                 if target.kind == Kind::Float {
                     trace!("Float container, selecting left/right/top/bottom-most child");
                     let key = |n: &&Node| {
@@ -210,7 +205,7 @@ fn select_leaf<'a>(mut t: &'a Node, targets: &[Target]) -> &'a Node {
                     } else {
                         t.floating_nodes.iter().min_by_key(key)
                     }
-                // We don't handle outputs, as we will never move from one `Root` to another.
+                // NOTE: We don't handle outputs, as we will never move from one `Root` to another.
                 // For other container types, we can just select the first or last.
                 } else if target.backward {
                     t.nodes.last()
