@@ -15,8 +15,7 @@ rather than some sequence of `focus parent` and `focus [direction]` actions.
 ## Installation instructions
 
 The project compiles to a standalone binary
-that interfaces with the WM using `swaymsg`
-(or `i3-msg` when given an `--i3` flag).
+that interfaces with `sway` or `i3` over IPC.
 
 Build with `cargo build --release` using `rustc` v1.58 or higher.
 Copy the binary from `target/release/sway-overfocus`
