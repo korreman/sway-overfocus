@@ -1,6 +1,6 @@
 Syntax:
 
-    sway-overfocus [--i3] <targets>
+    sway-overfocus <targets>
 
 Targets:
 
@@ -35,7 +35,6 @@ a direction, and an edge case behavior.
 Example:
 
     sway-overfocus split-lt float-lt output-ls
-    sway-overfocus --i3 split-lt float-lt output-ls
 
 This command will move left, though only between splits, floats, and outputs.
 Tabs will be skipped, and a visible container physically left of the current one
