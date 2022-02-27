@@ -102,7 +102,6 @@ fn neighbor_local<'a>(tree: &'a Node, target: &Target) -> Option<&'a Node> {
     let (focus_idx, children) = focus_idx(tree)?;
 
     if target.kind == Kind::Float || target.kind == Kind::Output {
-        trace!("Target is floating/output");
         let focus_id = *tree.focus.first()?;
         let focused = &children[focus_idx];
         trace!("Focused {:?}", focused.rect);
@@ -110,81 +109,61 @@ fn neighbor_local<'a>(tree: &'a Node, target: &Target) -> Option<&'a Node> {
         // Selects x or y component of a rect, based on whether the target is horizontal/vertical
         let component = |r: &Rect| if target.vertical { (r.y, r.height) } else { (r.x, r.width) };
 
-        // Computes the middle across the selected component
-        let middle = |r: &Rect| {
-            let (pos, dim) = component(r);
-            pos + dim / 2
-        };
-
-        // Floats and outputs are chosen based on dimensions and position.
-        // Both are first filtered by a criteria,
-        // then the minimum/maximum container is chosen based on some distance measure.
-
-        // Filtering predicate
-        let pred = |t: &Node, flip: bool| {
-            trace!("Testing node {}, {:?}", t.id, t.rect);
+        // Computes a distance to the focused node.
+        // Handles directions and filters out irrelevant neighbors.
+        let dist = |t: &Node, flip: bool| -> Option<(i32, i64)> {
+            trace!("Computing distance to {}", t.id);
+            if t.id == focus_id { return None; }
             let (a, b) = if flip { (&t.rect, &focused.rect) } else { (&focused.rect, &t.rect) };
-            let p = t.id != focus_id // Discard currently focused node
-                && match target.kind {
-                    // For floats, the middle must be past the focused middle on the chosen axis
-                    Kind::Float => {
-                        // If perfectly aligned, IDs are used for bounds checks as well
-                        let id_bound = flip == (focus_id < t.id);
-                        middle(a) < middle(b) || (middle(a) == middle(b) && id_bound)
-                    }
-                    // For outputs, their rects must be strictly past the focused rect
-                    Kind::Output => a.x + a.width <= b.x,
-                    _ => unreachable!(),
-                };
-            trace!("Passes filter: {p}");
-            p
-        };
+            let ((a_pos, a_dim), (b_pos, b_dim)) = (component(a), component(b));
+            let (a_mid, b_mid) = (a_pos + a_dim / 2, b_pos + b_dim / 2);
+            let a_edge = a_pos + a_dim;
+            trace!("A component: ({a_pos}, {a_dim}), B component: ({b_pos}, {b_dim})");
+            trace!("A middle: {a_mid}, B middle: {b_mid}");
+            trace!("A edge: {a_edge}");
 
-        // Distance measure
-        let dist_key = |t: &Node, flip: bool| {
-            trace!("Measuring node {}, {:?}", t.id, t.rect);
-            let pos_dist = match target.kind {
-                // Floats are chosen by component-wise distance
-                Kind::Float => (middle(&t.rect) - middle(&focused.rect)).saturating_abs(),
-                // Outputs are chosen by euclidean distance from focused center to closest point
-                Kind::Output => {
-                    let center = Vec2 {
+            let dist = match target.kind {
+                // Floats are compared by distance of centers on one axis
+                Kind::Float if a_mid < b_mid || (a_mid == b_mid && flip == (t.id > focus_id)) => {
+                    Some((b_mid - a_mid).saturating_abs())
+                }
+                // Outputs are compared by euclidean distance to center of focused node
+                Kind::Output if a_edge <= b_pos => {
+                    let c = Vec2 {
                         x: focused.rect.x + focused.rect.width / 2,
                         y: focused.rect.y + focused.rect.height / 2,
                     };
-                    let p = closest_point(&t.rect, &center);
-                    (center.x - p.x) * (center.x - p.x) + (center.y - p.y) * (center.y - p.y)
+                    let p = closest_point(&t.rect, &c);
+                    Some((c.x - p.x) * (c.x - p.x) + (c.y - p.y) * (c.y - p.y))
                 }
-                _ => unreachable!(),
-            };
-            trace!("Distance {pos_dist}");
-            // IDs are included to resolve ties
-            let id_order = if flip { t.id } else { -t.id };
-            (pos_dist, id_order)
+                _ => None,
+            }?;
+            trace!("Distance: {dist}");
+            Some((dist, if flip { t.id } else { -t.id }))
         };
-
-        // Filter by predicate and select closest node
+        // Select the closest neighbor to focused child,
+        // or furthest in the opposite direction if wrapping.
         let mut res = children
             .iter()
-            .filter(|n| pred(n, target.backward))
-            .min_by_key(|n| dist_key(n, target.backward));
-        // If wrapping, filter by flipped (not negated) predicate and select furthest node
-        if target.edge_mode == EdgeMode::Wrap {
-            trace!("Finding potential wraparound target");
+            .filter_map(|n| Some((dist(n, target.backward)?, n)))
+            .min_by_key(|(d, _)| *d)
+            .map(|(_, node)| node);
+        if res.is_none() && target.edge_mode == EdgeMode::Wrap {
+            trace!("No neighbor, searching for wraparound target");
             let wrap_target = children
                 .iter()
-                .filter(|n| pred(n, !target.backward))
-                .max_by_key(|n| dist_key(n, !target.backward));
-            res = res.or(wrap_target).or(Some(focused));
+                .filter_map(|n| Some((dist(n, !target.backward)?, n)))
+                .max_by_key(|(d, _)| *d)
+                .map(|(_, node)| node);
+            // Also includes focused container as a last resort.
+            // Because this allows traversing wraparound for multiple outputs.
+            res = wrap_target.or(Some(focused));
         }
         res
     } else {
         trace!("Selecting neighbor by index");
         let len = children.len();
-        trace!(
-            "Focused subnode index: {focus_idx} out of {}",
-            len - 1
-        );
+        trace!("Focused subnode index: {focus_idx} out of {}", len - 1);
         // The remaining targets can be chosen by index, disregarding verticality
         // Add length to avoid underflow
         let idx = focus_idx + len;

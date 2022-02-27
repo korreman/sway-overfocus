@@ -29,6 +29,29 @@ pub fn focus_command(node: &Node) -> Option<String> {
     }
 }
 
+/// Return the focused child, if any.
+pub fn focus_local(node: &Node) -> Option<&Node> {
+    let focus = *node.focus.first()?;
+    node.nodes
+        .iter()
+        .chain(node.floating_nodes.iter())
+        .find(|child| child.id == focus)
+}
+
+/// Compute the index (_not_ identifier) of the focused node in child array, if any.
+/// Also returns the vector of children to index into (either regular nodes or floats).
+pub fn focus_idx(node: &Node) -> Option<(usize, &Vec<Node>)> {
+    let focus = *node.focus.first()?;
+    for children in [&node.nodes, &node.floating_nodes] {
+        for (index, child) in children.iter().enumerate() {
+            if child.id == focus {
+                return Some((index, children));
+            }
+        }
+    }
+    None
+}
+
 /// Reform the tree to prepare for neighbor searching
 pub fn preprocess(mut node: Node) -> Node {
     node.layout = NodeLayout::None;
@@ -103,32 +126,4 @@ pub fn extract_fullscreen_child(node: &mut Node) -> Option<Node> {
     } else {
         node.nodes.iter_mut().find_map(extract_fullscreen_child)
     }
-}
-
-/// Compute the index (_not_ identifier) of the focused node in child array,
-/// if any.
-pub fn focus_idx(node: &Node) -> Option<(usize, &Vec<Node>)> {
-    let focus = *node.focus.first()?;
-    let regular = node
-        .nodes
-        .iter()
-        .enumerate()
-        .find(|(_, child)| child.id == focus)
-        .map(|r| (r.0, &node.nodes));
-    let floats = node
-        .floating_nodes
-        .iter()
-        .enumerate()
-        .find(|(_, child)| child.id == focus)
-        .map(|r| (r.0, &node.floating_nodes));
-    regular.or(floats)
-}
-
-/// Return the focused child, if any.
-pub fn focus_local(node: &Node) -> Option<&Node> {
-    let focus = *node.focus.first()?;
-    node.nodes
-        .iter()
-        .chain(node.floating_nodes.iter())
-        .find(|child| child.id == focus)
 }
