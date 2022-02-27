@@ -3,7 +3,7 @@ use log::{debug, trace};
 use std::mem;
 use swayipc::{Node, NodeLayout, NodeType, Rect};
 
-/// Closest point to `p` within the rectangle.
+/// Closest point to `p` within `rect`.
 pub fn closest_point(rect: &Rect, p: &Vec2) -> Vec2 {
     Vec2 {
         x: i32::clamp(p.x, rect.x, rect.x + rect.width - 1),
@@ -17,7 +17,7 @@ pub struct Vec2 {
     pub y: i32,
 }
 
-/// Generate a command that will focus the top node.
+/// Generate a command that will focus `node`.
 pub fn focus_command(node: &Node) -> Option<String> {
     let name = node.name.clone()?;
     let id = node.id;
@@ -53,6 +53,8 @@ pub fn focus_idx(node: &Node) -> Option<(usize, &Vec<Node>)> {
 }
 
 /// Reform the tree to prepare for neighbor searching
+/// This mainly consists of collapsing i3 outputs with `content` subnodes
+/// and workspaces with fullscreen descendants
 pub fn preprocess(mut node: Node) -> Node {
     node.layout = NodeLayout::None;
     // Remove scratchpad and potential similar output nodes
@@ -67,7 +69,7 @@ pub fn preprocess(mut node: Node) -> Node {
         );
 
         // On i3, outputs contain a `content` subnode containing workspaces.
-        // If this is the case, replace the children of the output those of the content node.
+        // If this is the case, replace the children of the output with those of the `content` node.
         if let Some(content) = output
             .nodes
             .iter_mut()
@@ -85,26 +87,20 @@ pub fn preprocess(mut node: Node) -> Node {
                 workspace.name.as_ref().unwrap_or(&"".to_string()),
                 workspace.id,
             );
-            // For any workspace with a fullscreen child, replace it with said child
-            if let Some(mut fullscreen_node) = extract_fullscreen_child(workspace) {
+            // Collapse nodes with fullscreen descendants
+            if let Some(fullscreen_node) = extract_fullscreen_child(workspace) {
+                debug!(
+                    "Node {} has fullscreen mode {}",
+                    fullscreen_node.id,
+                    fullscreen_node.fullscreen_mode.unwrap()
+                );
                 // If the node is global fullscreen, it replaces the entire tree
                 if fullscreen_node.fullscreen_mode == Some(2) {
-                    debug!(
-                        "Node {} is global fullscreen, replaces entire tree",
-                        fullscreen_node.id
-                    );
+                    trace!("Replacing entire tree");
                     return fullscreen_node;
                 }
-                // Preserve workspace ID, type, and name when replacing.
-                // If the fullscreen node is a focus target,
-                // it will be focused indirectly through the workspace name.
-                trace!(
-                    "Node {} is fullscreen, replaces workspace",
-                    fullscreen_node.id
-                );
-                fullscreen_node.id = workspace.id;
-                fullscreen_node.node_type = NodeType::Workspace;
-                fullscreen_node.name = mem::take(&mut workspace.name);
+                // Otherwise, it replaces the workspace
+                output.focus = vec![fullscreen_node.id]; // We must change parent focus as well
                 *workspace = fullscreen_node;
             }
         }
@@ -112,9 +108,9 @@ pub fn preprocess(mut node: Node) -> Node {
     node
 }
 
-/// Search the tree for a child that is fullscreen.
-/// If found, the child is detached and returned.
-/// Neighbors of the child are detached and dropped as collateral.
+/// Search the tree for a fullscreen descendant.
+/// If found, the descendant is detached and returned.
+/// Neighbors of the descendant are detached and dropped as collateral.
 pub fn extract_fullscreen_child(node: &mut Node) -> Option<Node> {
     let mut children = node.nodes.iter_mut().chain(node.floating_nodes.iter_mut());
     let pred = |child: &Node| child.fullscreen_mode == Some(1) || child.fullscreen_mode == Some(2);
