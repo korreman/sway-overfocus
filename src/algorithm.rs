@@ -41,14 +41,11 @@ pub enum EdgeMode {
 /// Find a neighbor matching one of the `targets`.
 pub fn neighbor<'a>(mut t: &'a Node, targets: &[Target]) -> Option<&'a Node> {
     // Go down the focus path and collect matching parents.
-    debug!("Performing downward focus traversal");
-    let mut matching_parents = Vec::new();
+    debug!("Finding focus path");
+    let mut path = Vec::new();
     while !t.focused {
         debug!("Node {}, {:?}", t.id, t.name);
-        if let Some(target) = match_targets(t, targets) {
-            trace!("Matched {target:?}");
-            matching_parents.push((target, t));
-        }
+        path.push(t);
         if let Some(new_t) = focus_local(t) {
             t = new_t;
         } else {
@@ -60,19 +57,19 @@ pub fn neighbor<'a>(mut t: &'a Node, targets: &[Target]) -> Option<&'a Node> {
     // Search backwards through the stack of parents for a valid neighbor.
     // Returns an `Option<Option<_>>`,
     // `Some(None)` is used to stop early when matching a target with `EdgeMode::Stop`.
-    let neighbor = matching_parents.iter().rev().find_map(|(t, p)| {
-        debug!("Parent {}", p.id);
-        let n = neighbor_local(p, t);
-        if let Some(n) = n {
-            debug!("Found neighbor: {}", n.id);
-        }
-        if t.edge_mode == EdgeMode::Stop {
+    let neighbor = path.iter().rev().find_map(|parent| {
+        debug!("Parent {}", parent.id);
+        let target = match_targets(parent, targets)?;
+        trace!("Matched {target:?}");
+        let n = neighbor_local(parent, &target);
+        if target.edge_mode == EdgeMode::Stop {
             debug!("Target is stopping, forcing return");
             Some(n)
         } else {
             n.map(Some)
         }
     })??;
+    debug!("Found neighbor: {}", neighbor.id);
     debug!("Selecting a leaf descendant of neighbor");
     Some(select_leaf(neighbor, targets))
 }
@@ -90,7 +87,7 @@ fn match_targets(node: &Node, targets: &[Target]) -> Option<Target> {
             !target.vertical && node.layout == NodeLayout::Tabbed
                 || target.vertical && node.layout == NodeLayout::Stacked
         }
-        Kind::Float => false, // TODO
+        Kind::Float => todo!(),
     })?;
     Some(res)
 }
@@ -106,23 +103,18 @@ fn neighbor_local<'a>(tree: &'a Node, target: &Target) -> Option<&'a Node> {
         let focused = &tree.nodes[focus_idx];
         trace!("Focused {:?}", focused.rect);
 
-        // Floats and outputs are chosen based on dimensions and position.
-        // Both are first filtered by a criteria,
-        // then the minimum/maximum container is chosen based on some distance measure.
-
-        let component = |r: &Rect| {
-            if target.vertical {
-                (r.y, r.height)
-            } else {
-                (r.x, r.width)
-            }
-        };
+        // Selects x or y component of a rect, based on whether the target is horizontal/vertical
+        let component = |r: &Rect| if target.vertical { (r.y, r.height) } else { (r.x, r.width) };
 
         // Computes the middle across the selected component
         let middle = |r: &Rect| {
             let (pos, dim) = component(r);
             pos + dim / 2
         };
+
+        // Floats and outputs are chosen based on dimensions and position.
+        // Both are first filtered by a criteria,
+        // then the minimum/maximum container is chosen based on some distance measure.
 
         // Filtering predicate
         let pred = |t: &Node, flip: bool| {
