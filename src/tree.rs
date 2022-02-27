@@ -114,7 +114,7 @@ pub fn preprocess(mut node: Node) -> Node {
 pub fn extract_fullscreen_child(node: &mut Node) -> Option<Node> {
     let mut children = node.nodes.iter_mut().chain(node.floating_nodes.iter_mut());
     let pred = |child: &Node| child.fullscreen_mode == Some(1) || child.fullscreen_mode == Some(2);
-    if children.any(|c| pred(&c)) {
+    if children.any(|c| pred(c)) {
         let nodes = mem::take(&mut node.nodes);
         let floating_nodes = mem::take(&mut node.floating_nodes);
         let mut children = nodes.into_iter().chain(floating_nodes.into_iter());
