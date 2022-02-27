@@ -1,4 +1,4 @@
-//! Tree types, parsing, and pre-processing.
+//! Basic tree functions and pre-processing
 use log::{debug, trace};
 use std::mem;
 use swayipc::{Node, NodeLayout, NodeType, Rect};
