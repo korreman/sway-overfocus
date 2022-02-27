@@ -76,18 +76,22 @@ pub fn neighbor<'a>(mut t: &'a Node, targets: &[Target]) -> Option<&'a Node> {
 
 /// Finds a parent that contains direct children matching one of the `targets`.
 fn match_targets(node: &Node, targets: &[Target]) -> Option<Target> {
+    let focus = *node.focus.first()?;
+    let float_focused = node.floating_nodes.iter().any(|c| c.id == focus);
     let res = *targets.iter().find(|target| match target.kind {
         Kind::Output => node.node_type == NodeType::Root,
         Kind::Workspace => node.node_type == NodeType::Output,
         Kind::Split => {
-            !target.vertical && node.layout == NodeLayout::SplitH
-                || target.vertical && node.layout == NodeLayout::SplitV
+            !float_focused
+                && (!target.vertical && node.layout == NodeLayout::SplitH
+                    || target.vertical && node.layout == NodeLayout::SplitV)
         }
         Kind::Group => {
-            !target.vertical && node.layout == NodeLayout::Tabbed
-                || target.vertical && node.layout == NodeLayout::Stacked
+            !float_focused
+                && (!target.vertical && node.layout == NodeLayout::Tabbed
+                    || target.vertical && node.layout == NodeLayout::Stacked)
         }
-        Kind::Float => todo!(),
+        Kind::Float => float_focused,
     })?;
     Some(res)
 }
@@ -95,12 +99,12 @@ fn match_targets(node: &Node, targets: &[Target]) -> Option<Target> {
 /// Tries to find a neighbor of the focused child of the top node in `tree`,
 /// according to the given target.
 fn neighbor_local<'a>(tree: &'a Node, target: &Target) -> Option<&'a Node> {
-    let focus_idx = focus_idx(tree)?;
-    trace!("Finding neighbor for {target:?}");
+    let (focus_idx, children) = focus_idx(tree)?;
 
     if target.kind == Kind::Float || target.kind == Kind::Output {
+        trace!("Target is floating/output");
         let focus_id = *tree.focus.first()?;
-        let focused = &tree.nodes[focus_idx];
+        let focused = &children[focus_idx];
         trace!("Focused {:?}", focused.rect);
 
         // Selects x or y component of a rect, based on whether the target is horizontal/vertical
@@ -160,16 +164,14 @@ fn neighbor_local<'a>(tree: &'a Node, target: &Target) -> Option<&'a Node> {
         };
 
         // Filter by predicate and select closest node
-        let mut res = tree
-            .nodes
+        let mut res = children
             .iter()
             .filter(|n| pred(n, target.backward))
             .min_by_key(|n| dist_key(n, target.backward));
         // If wrapping, filter by flipped (not negated) predicate and select furthest node
         if target.edge_mode == EdgeMode::Wrap {
             trace!("Finding potential wraparound target");
-            let wrap_target = tree
-                .nodes
+            let wrap_target = children
                 .iter()
                 .filter(|n| pred(n, !target.backward))
                 .max_by_key(|n| dist_key(n, !target.backward));
@@ -178,12 +180,12 @@ fn neighbor_local<'a>(tree: &'a Node, target: &Target) -> Option<&'a Node> {
         res
     } else {
         trace!("Selecting neighbor by index");
+        let len = children.len();
         trace!(
             "Focused subnode index: {focus_idx} out of {}",
-            tree.nodes.len() - 1
+            len - 1
         );
         // The remaining targets can be chosen by index, disregarding verticality
-        let len = tree.nodes.len();
         // Add length to avoid underflow
         let idx = focus_idx + len;
         let idx = if target.backward { idx - 1 } else { idx + 1 };
@@ -197,7 +199,7 @@ fn neighbor_local<'a>(tree: &'a Node, target: &Target) -> Option<&'a Node> {
             None
         };
         trace!("Resulting index: {idx:?}");
-        idx.map(|idx| &tree.nodes[idx])
+        idx.map(|idx| &children[idx])
     }
 }
 
@@ -225,9 +227,9 @@ fn select_leaf<'a>(mut t: &'a Node, targets: &[Target]) -> &'a Node {
                         (center, -n.id)
                     };
                     if target.backward {
-                        t.nodes.iter().max_by_key(key)
+                        t.floating_nodes.iter().max_by_key(key)
                     } else {
-                        t.nodes.iter().min_by_key(key)
+                        t.floating_nodes.iter().min_by_key(key)
                     }
                 // We don't handle outputs, as we will never move from one `Root` to another.
                 // For other container types, we can just select the first or last.

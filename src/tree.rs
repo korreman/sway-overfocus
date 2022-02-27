@@ -89,23 +89,17 @@ pub fn preprocess(mut node: Node) -> Node {
     node
 }
 
-// TODO: Handle floats in functions below
-
 /// Search the tree for a child that is fullscreen.
 /// If found, the child is detached and returned.
 /// Neighbors of the child are detached and dropped as collateral.
 pub fn extract_fullscreen_child(node: &mut Node) -> Option<Node> {
-    if node
-        .nodes
-        .iter()
-        .any(|node| node.fullscreen_mode == Some(1) || node.fullscreen_mode == Some(2))
-    {
+    let mut children = node.nodes.iter_mut().chain(node.floating_nodes.iter_mut());
+    let pred = |child: &Node| child.fullscreen_mode == Some(1) || child.fullscreen_mode == Some(2);
+    if children.any(|c| pred(&c)) {
         let nodes = mem::take(&mut node.nodes);
-        let node: Node = nodes
-            .into_iter()
-            .find(|node| node.fullscreen_mode == Some(1) || node.fullscreen_mode == Some(2))
-            .unwrap();
-        Some(node)
+        let floating_nodes = mem::take(&mut node.floating_nodes);
+        let mut children = nodes.into_iter().chain(floating_nodes.into_iter());
+        children.find(pred)
     } else {
         node.nodes.iter_mut().find_map(extract_fullscreen_child)
     }
@@ -113,17 +107,28 @@ pub fn extract_fullscreen_child(node: &mut Node) -> Option<Node> {
 
 /// Compute the index (_not_ identifier) of the focused node in child array,
 /// if any.
-pub fn focus_idx(node: &Node) -> Option<usize> {
-    node.nodes.iter().enumerate().find_map(|(idx, n)| {
-        if n.id == *node.focus.first()? {
-            Some(idx)
-        } else {
-            None
-        }
-    })
+pub fn focus_idx(node: &Node) -> Option<(usize, &Vec<Node>)> {
+    let focus = *node.focus.first()?;
+    let regular = node
+        .nodes
+        .iter()
+        .enumerate()
+        .find(|(_, child)| child.id == focus)
+        .map(|r| (r.0, &node.nodes));
+    let floats = node
+        .floating_nodes
+        .iter()
+        .enumerate()
+        .find(|(_, child)| child.id == focus)
+        .map(|r| (r.0, &node.floating_nodes));
+    regular.or(floats)
 }
 
 /// Return the focused child, if any.
 pub fn focus_local(node: &Node) -> Option<&Node> {
-    node.nodes.get(focus_idx(node)?)
+    let focus = *node.focus.first()?;
+    node.nodes
+        .iter()
+        .chain(node.floating_nodes.iter())
+        .find(|child| child.id == focus)
 }
