@@ -17,10 +17,11 @@ rather than some sequence of `focus parent` and `focus [direction]` actions.
 The project compiles to a standalone binary
 that interfaces with `sway` or `i3` over IPC.
 
-Build with `cargo build --release` using `rustc` v1.58 or higher.
-Copy the binary from `target/release/sway-overfocus`
+Download a [release](https://github.com/korreman/sway-overfocus/releases)
+or build with `cargo build --release` using `rustc` v1.58 or higher.
+Copy the binary (located in `./target/release` when building)
 to a location in your `$PATH`,
-typically `~/.local/bin`.
+fx. `~/.local/bin`.
 Then insert/replace keybinds to run `exec "sway-overfocus..."` commands
 in your sway configuration.
 
