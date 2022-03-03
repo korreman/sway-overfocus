@@ -19,13 +19,12 @@ pub struct Vec2 {
 
 /// Generate a command that will focus `node`.
 pub fn focus_command(node: &Node) -> Option<String> {
-    let name = node.name.clone()?;
-    let id = node.id;
+    let name = node.name.clone();
     match node.node_type {
         NodeType::Root => None,
-        NodeType::Output => Some(format!("focus output {name}")),
-        NodeType::Workspace => Some(format!("workspace {name}")),
-        _ => Some(format!("[con_id={id}] focus")),
+        NodeType::Output => Some(format!("focus output {}", name?)),
+        NodeType::Workspace => Some(format!("workspace {}", name?)),
+        _ => Some(format!("[con_id={}] focus", node.id)),
     }
 }
 
