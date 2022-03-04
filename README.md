@@ -29,9 +29,9 @@ See the [usage](usage.md) page for details on constructing focus commands.
 The following config section is a good starting point,
 but commands can be configured granularly to suit your needs.
 
-    bindsym $mod+h exec 'sway-overfocus split-lt float-lt output-ls'
-    bindsym $mod+j exec 'sway-overfocus split-dt float-dt output-ds'
-    bindsym $mod+k exec 'sway-overfocus split-ut float-ut output-us'
-    bindsym $mod+l exec 'sway-overfocus split-rt float-rt output-rs'
-    bindsym $mod+Tab exec 'sway-overfocus group-rw group-dw'
-    bindsym $mod+Shift+Tab exec 'sway-overfocus group-lw group-uw'
+    bindsym $mod+h exec sway-overfocus split-lt float-lt output-ls
+    bindsym $mod+j exec sway-overfocus split-dt float-dt output-ds
+    bindsym $mod+k exec sway-overfocus split-ut float-ut output-us
+    bindsym $mod+l exec sway-overfocus split-rt float-rt output-rs
+    bindsym $mod+Tab exec sway-overfocus group-rw group-dw
+    bindsym $mod+Shift+Tab exec sway-overfocus group-lw group-uw
