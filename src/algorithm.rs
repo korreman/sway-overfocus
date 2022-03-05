@@ -1,6 +1,6 @@
 //! Neighbor-finding algorithm.
 use crate::tree::{closest_point, focus_idx, focus_local, Vec2};
-use log::{debug, trace, error};
+use log::{debug, trace, warn};
 use swayipc::{Node, NodeLayout, NodeType, Rect};
 
 /// A target description for neighbor searching.
