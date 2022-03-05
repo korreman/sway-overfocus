@@ -99,7 +99,10 @@ pub fn preprocess(mut node: Node) -> Node {
                     return fullscreen_node;
                 }
                 // Otherwise, it replaces the workspace
-                output.focus = vec![fullscreen_node.id]; // We must change parent focus as well
+                if output.focus.first() == Some(&workspace.id) {
+                    // We may potentially have to change parent focus
+                    output.focus = vec![fullscreen_node.id];
+                }
                 *workspace = fullscreen_node;
             }
         }

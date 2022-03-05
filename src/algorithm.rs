@@ -1,6 +1,6 @@
 //! Neighbor-finding algorithm.
 use crate::tree::{closest_point, focus_idx, focus_local, Vec2};
-use log::{debug, trace};
+use log::{debug, trace, error};
 use swayipc::{Node, NodeLayout, NodeType, Rect};
 
 /// A target description for neighbor searching.
@@ -49,7 +49,7 @@ pub fn neighbor<'a>(mut t: &'a Node, targets: &[Target]) -> Option<&'a Node> {
         if let Some(new_t) = focus_local(t) {
             t = new_t;
         } else {
-            trace!("No focused child, stopping");
+            warn!("No focused child, incomplete focus path");
             break;
         }
     }
