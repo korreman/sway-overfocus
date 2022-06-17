@@ -13,6 +13,9 @@ enum FocusError {
 }
 
 fn main() {
+    #[cfg(profile = "debug")]
+    env_logger::init();
+
     match task() {
         Err(e) => {
             match e {
@@ -27,7 +30,6 @@ fn main() {
 }
 
 fn task() -> Result<(), FocusError> {
-    env_logger::init();
     info!("Parsing arguments");
     let args: Box<[String]> = std::env::args().collect();
     let targets = parse_args(&args).ok_or(FocusError::Args)?;
