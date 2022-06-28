@@ -18,7 +18,7 @@ The project compiles to a standalone binary
 that interfaces with `sway` or `i3` over IPC.
 
 Download a [release](https://github.com/korreman/sway-overfocus/releases)
-or build with `cargo build --release` using `rustc` v1.58 or higher.
+or build with `cargo build --release` using `rustc` v1.59 or higher.
 Copy the binary (located in `./target/release` when building)
 to a location in your `$PATH`,
 fx. `~/.local/bin`.
