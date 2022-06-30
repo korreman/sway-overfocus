@@ -25,6 +25,9 @@ fx. `~/.local/bin`.
 Then insert/replace keybinds to run `exec sway-overfocus ...` commands
 in your sway configuration.
 
+If you use the pacman package manager, an AUR package with the name [`sway-overfocus`](https://aur.archlinux.org/packages/sway-overfocus) is available as well.
+Note that the package is not maintained by the original author of the software.
+
 See the [usage](usage.md) page for details on constructing focus commands.
 The following config section is a good starting point,
 but commands can be configured granularly to suit your needs.
