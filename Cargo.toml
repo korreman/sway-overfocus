@@ -10,8 +10,8 @@ lto = true
 strip = true
 
 [dependencies]
-log = "0.4.17"
-swayipc = "3.0.1"
+log = "0.4.22"
+swayipc = "3.0.2"
 
 [target.'cfg(profile = "debug")'.dependencies]
-env_logger = "0.10.0"
+env_logger = "0.11.5"
