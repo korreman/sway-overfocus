@@ -15,16 +15,13 @@ enum FocusError {
 fn main() {
     env_logger::init();
 
-    match task() {
-        Err(e) => {
-            match e {
-                FocusError::Args => eprint!("{}", include_str!("../usage.md")),
-                FocusError::Command => eprintln!("error: no valid focus command"),
-                FocusError::SwayIPC(e) => eprintln!("swayipc error: {e}"),
-            };
-            std::process::exit(1);
-        }
-        Ok(()) => (),
+    if let Err(e) = task() {
+        match e {
+            FocusError::Args => eprint!("{}", include_str!("../usage.md")),
+            FocusError::Command => eprintln!("error: no valid focus command"),
+            FocusError::SwayIPC(e) => eprintln!("swayipc error: {e}"),
+        };
+        std::process::exit(1);
     }
 }
 

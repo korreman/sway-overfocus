@@ -119,7 +119,7 @@ pub fn extract_fullscreen_child(node: &mut Node) -> Option<Node> {
     if children.any(|c| pred(c)) {
         let nodes = mem::take(&mut node.nodes);
         let floating_nodes = mem::take(&mut node.floating_nodes);
-        let mut children = nodes.into_iter().chain(floating_nodes.into_iter());
+        let mut children = nodes.into_iter().chain(floating_nodes);
         children.find(pred)
     } else {
         node.nodes.iter_mut().find_map(extract_fullscreen_child)
