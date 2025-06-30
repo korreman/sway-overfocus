@@ -13,5 +13,4 @@ strip = true
 log = "0.4.22"
 swayipc = "3.0.2"
 
-[target.'cfg(profile = "debug")'.dependencies]
 env_logger = "0.11.5"

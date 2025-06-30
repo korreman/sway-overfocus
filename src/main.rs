@@ -13,7 +13,6 @@ enum FocusError {
 }
 
 fn main() {
-    #[cfg(profile = "debug")]
     env_logger::init();
 
     match task() {
